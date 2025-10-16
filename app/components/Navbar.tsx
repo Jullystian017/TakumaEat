@@ -93,8 +93,22 @@ export function Navbar() {
     setMobileDashboardOpen(false);
   };
   const closeCart = () => setCartOpen(false);
+  const ensureAuthenticated = () => {
+    if (isAuthenticated) {
+      return true;
+    }
+
+    const callbackUrl = pathname ?? '/';
+    router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+
+    return false;
+  };
   const toggleDesktopDashboard = () =>
     setDesktopDashboardOpen((prev) => {
+      if (!ensureAuthenticated()) {
+        return prev;
+      }
+
       const next = !prev;
       if (next) {
         setMobileDashboardOpen(false);
@@ -104,6 +118,10 @@ export function Navbar() {
     });
   const toggleMobileDashboard = () =>
     setMobileDashboardOpen((prev) => {
+      if (!ensureAuthenticated()) {
+        return prev;
+      }
+
       const next = !prev;
       if (next) {
         setDesktopDashboardOpen(false);
@@ -113,6 +131,10 @@ export function Navbar() {
     });
   const toggleCart = () =>
     setCartOpen((prev) => {
+      if (!ensureAuthenticated()) {
+        return prev;
+      }
+
       const next = !prev;
       if (next) {
         closeDashboardMenu();
@@ -190,6 +212,14 @@ export function Navbar() {
       window.removeEventListener('mousedown', handleClickOutside);
     };
   }, [anyDashboardOpen, cartOpen]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCartOpen(false);
+      setDesktopDashboardOpen(false);
+      setMobileDashboardOpen(false);
+    }
+  }, [isAuthenticated]);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50">
