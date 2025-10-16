@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ClipboardList, Home, MapPin, Wallet } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -97,7 +97,7 @@ type CreateOrderResponse = {
   };
 };
 
-export default function CheckoutPage() {
+function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status: sessionStatus } = useSession();
@@ -1065,5 +1065,13 @@ export default function CheckoutPage() {
     )}
     <Footer />
   </>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#fdf9f1]" />}>
+      <CheckoutPageContent />
+    </Suspense>
   );
 }
