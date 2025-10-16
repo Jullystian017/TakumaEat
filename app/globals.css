@@ -1,0 +1,57 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+}
+
+html {
+  font-family: "Poppins", "Noto Sans JP";
+}
+
+body {
+  @apply min-h-screen bg-white text-black antialiased;
+  font-family: "Poppins", "Noto Sans JP";
+  background-image: radial-gradient(circle at top left, rgba(239, 176, 54, 0.12), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(0, 0, 0, 0.06), transparent 45%);
+}
+
+.font-poppins {
+  font-family: "Poppins", "Noto Sans JP";
+}
+
+.font-noto {
+  font-family: "Noto Sans JP", "Poppins";
+}
+
+a {
+  @apply transition-colors;
+}
+
+::selection {
+  background: rgba(239, 176, 54, 0.25);
+  color: #000;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(239, 176, 54, 0.7);
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(239, 176, 54, 0.9);
+}
