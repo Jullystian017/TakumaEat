@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ClipboardList, Home, MapPin, Wallet } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -124,6 +124,7 @@ function CheckoutPageContent() {
   const [showThankYouModal, setShowThankYouModal] = useState(false);
   const [thankYouVariant, setThankYouVariant] = useState<'success' | 'pending' | 'cod' | 'error'>('success');
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const orderFinalizedRef = useRef(false);
 
   const storageKey = "takumaeat:checkout-state";
 
@@ -139,10 +140,10 @@ function CheckoutPageContent() {
   }, [sessionStatus, router]);
 
   useEffect(() => {
-    if (cartItemCount === 0) {
+    if (!orderFinalizedRef.current && step === "review" && cartItemCount === 0) {
       router.replace("/menu");
     }
-  }, [cartItemCount, router]);
+  }, [cartItemCount, router, step]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -445,6 +446,12 @@ function CheckoutPageContent() {
         localStorage.removeItem(storageKey);
       }
 
+      const finalizeOrder = (variant: 'success' | 'pending' | 'cod' | 'error') => {
+        orderFinalizedRef.current = true;
+        clearCart();
+        openThankYouModal(data.orderId, variant);
+      };
+
       if (
         data.payment.method === "midtrans" &&
         data.payment.snapToken &&
@@ -456,7 +463,7 @@ function CheckoutPageContent() {
 
         const showModal = (variant: 'success' | 'pending' | 'cod' | 'error') => {
           hasOpenedModal = true;
-          openThankYouModal(data.orderId, variant);
+          finalizeOrder(variant);
         };
 
         window.snap.pay(data.payment.snapToken, {
@@ -472,12 +479,10 @@ function CheckoutPageContent() {
             }
           }
         });
-        clearCart();
         return;
       }
 
-      clearCart();
-      openThankYouModal(data.orderId, data.payment.method === "midtrans" ? "pending" : "cod");
+      finalizeOrder(data.payment.method === "midtrans" ? "pending" : "cod");
     } catch (error) {
       setErrorMessage("Terjadi kesalahan tidak terduga. Silakan coba lagi.");
     } finally {
