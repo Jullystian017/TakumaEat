@@ -1043,7 +1043,7 @@ function CheckoutPageContent() {
 
     {showThankYouModal && createdOrderId && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
-        <div className="absolute inset-0 bg-black/50" aria-hidden="true" onClick={handleCloseModal} />
+        <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
         <div className="relative z-10 w-full max-w-xl overflow-hidden rounded-[32px] border border-white/20 bg-white/95 p-0 shadow-[0_40px_120px_rgba(15,23,42,0.28)] backdrop-blur">
           <div className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-[#fce3c7] via-[#fef3d4] to-[#f8dfc8] opacity-90" />
