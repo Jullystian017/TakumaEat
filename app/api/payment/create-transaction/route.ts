@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Order not found' }, { status: 404 });
     }
 
-    const finishUrl = `${APP_BASE_URL}/orders/${order.id}`;
+    const finishUrl = `${APP_BASE_URL}/checkout`;
 
     const response = await createMidtransTransaction({
       transaction_details: {

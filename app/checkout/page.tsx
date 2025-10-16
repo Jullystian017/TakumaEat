@@ -1044,26 +1044,43 @@ function CheckoutPageContent() {
     {showThankYouModal && createdOrderId && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
         <div className="absolute inset-0 bg-black/50" aria-hidden="true" onClick={handleCloseModal} />
-        <div className="relative z-10 w-full max-w-md space-y-6 rounded-3xl border border-[#eadfce] bg-white p-8 text-center shadow-[0_32px_80px_rgba(183,150,111,0.24)]">
-          <header className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#b59c7b]">Terima kasih</p>
-            <h2 className="text-2xl font-semibold text-[#1f1a11]">{modalContent.title}</h2>
-          </header>
-          <p className="text-sm text-[#5c5244]">{modalContent.description}</p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button
-              className="flex-1 rounded-full bg-[#8d5814] px-5 py-3 text-sm font-semibold text-white hover:bg-[#a1691a]"
-              onClick={handleViewOrder}
-            >
-              Lihat detail pesanan
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1 rounded-full border border-[#eadfce] bg-[#fff9f1] px-5 py-3 text-sm font-semibold text-[#7b5d2f] hover:bg-[#f4e7d6]"
-              onClick={handleCloseModal}
-            >
-              Nanti saja
-            </Button>
+        <div className="relative z-10 w-full max-w-xl overflow-hidden rounded-[32px] border border-white/20 bg-white/95 p-0 shadow-[0_40px_120px_rgba(15,23,42,0.28)] backdrop-blur">
+          <div className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-[#fce3c7] via-[#fef3d4] to-[#f8dfc8] opacity-90" />
+            <div className="relative flex flex-col items-center gap-4 px-10 pb-10 pt-12 text-center text-[#1f1a11]">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-[0_20px_40px_rgba(183,150,111,0.35)]">
+                <svg viewBox="0 0 64 64" className="h-8 w-8 text-[#c7812e]" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 32.5l10 9.5 22-20" />
+                </svg>
+              </div>
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#9c7440]">Terima kasih</p>
+                <h2 className="text-3xl font-semibold leading-tight text-[#1f1a11]">{modalContent.title}</h2>
+                <p className="text-sm text-[#5c5244]">{modalContent.description}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 border-t border-white/40 bg-white/96 px-8 py-6 text-left">
+            <div className="flex items-center gap-3 rounded-2xl border border-[#eadfce] bg-[#fff7eb] px-4 py-3 text-sm text-[#7b5d2f]">
+              <ClipboardList className="h-4 w-4 text-[#b8792c]" />
+              <span>Pesanan #{createdOrderId.slice(0, 8).toUpperCase()} sudah tercatat. Pantau statusnya dari halaman pesanan.</span>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-full border border-[#eadfce] bg-white px-5 py-3 text-sm font-semibold text-[#7b5d2f] hover:bg-[#f4e7d6] sm:flex-none sm:px-6"
+                onClick={handleCloseModal}
+              >
+                Nanti saja
+              </Button>
+              <Button
+                className="flex-1 rounded-full bg-[#c7812e] px-6 py-3 text-sm font-semibold text-white shadow-[0_22px_45px_rgba(199,129,46,0.42)] transition-transform hover:-translate-y-0.5 hover:bg-[#d8913f] sm:flex-none"
+                onClick={handleViewOrder}
+              >
+                Lihat detail pesanan
+              </Button>
+            </div>
           </div>
         </div>
       </div>
