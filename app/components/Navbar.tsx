@@ -12,7 +12,6 @@ import {
   LogOut,
   Minus,
   Plus,
-  Settings2,
   ShoppingCart,
   Trash2,
   UserPlus,
@@ -43,9 +42,9 @@ type DashboardLink = {
 };
 
 const dashboardLinks: DashboardLink[] = [
+  { href: '/profile', label: 'My Profile', icon: UserRound },
   { href: '/orders', label: 'My Orders', icon: ClipboardList },
-  { href: '/notifications', label: 'Notifications', icon: BellRing },
-  { href: '/settings', label: 'Settings', icon: Settings2 }
+  { href: '/notifications', label: 'Notifications', icon: BellRing }
 ];
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
@@ -373,16 +372,17 @@ export function Navbar() {
                               </Link>
                             </li>
                           ))}
+                          <li>
+                            <button
+                              type="button"
+                              onClick={handleLogout}
+                              className="flex w-full items-center gap-3 px-5 py-3 text-left text-[12px] font-semibold uppercase tracking-[0.24em] text-brand-gold transition-colors duration-200 hover:bg-black/5"
+                            >
+                              <LogOut className="h-4 w-4" />
+                              <span>Logout</span>
+                            </button>
+                          </li>
                         </ul>
-                        <div className="h-px bg-black/5" />
-                        <button
-                          type="button"
-                          onClick={handleLogout}
-                          className="flex w-full items-center gap-3 px-5 py-3 text-left text-[12px] font-semibold uppercase tracking-[0.24em] text-brand-gold transition-colors duration-200 hover:bg-black/5"
-                        >
-                          <LogOut className="h-4 w-4" />
-                          <span>Logout</span>
-                        </button>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -476,16 +476,17 @@ export function Navbar() {
                           </Link>
                         </li>
                       ))}
+                      <li>
+                        <button
+                          type="button"
+                          onClick={handleLogout}
+                          className="flex w-full items-center gap-3 px-5 py-3 text-left text-[12px] font-semibold uppercase tracking-[0.24em] text-brand-gold transition-colors duration-200 hover:bg-black/5"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          <span>Logout</span>
+                        </button>
+                      </li>
                     </ul>
-                    <div className="h-px bg-black/5" />
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="flex w-full items-center gap-3 px-5 py-3 text-left text-[12px] font-semibold uppercase tracking-[0.24em] text-brand-gold transition-colors duration-200 hover:bg-black/5"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      <span>Logout</span>
-                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>

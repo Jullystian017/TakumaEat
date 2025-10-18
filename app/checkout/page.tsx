@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardList, Home, MapPin, Wallet } from "lucide-react";
+import { ArrowLeft, ClipboardList, Home, MapPin } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ type TakeawayFormState = {
   paymentMethod: "midtrans" | "cod";
 };
 
-type Step = "review" | "details" | "payment" | "confirmation";
+type Step = "review" | "details" | "confirmation";
 
 const defaultDelivery: DeliveryFormState = {
   fullName: "",
@@ -100,6 +100,7 @@ type CreateOrderResponse = {
 function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const modeParam = searchParams?.get("mode");
   const { data: session, status: sessionStatus } = useSession();
   const {
     cartItems,
@@ -112,7 +113,7 @@ function CheckoutPageContent() {
   } = useCart();
 
   const [step, setStep] = useState<Step>("review");
-  const [orderType, setOrderType] = useState<OrderType>("delivery");
+  const [orderType, setOrderType] = useState<OrderType>(() => (modeParam === "takeaway" ? "takeaway" : "delivery"));
   const [deliveryForm, setDeliveryForm] = useState<DeliveryFormState>(defaultDelivery);
   const [takeawayForm, setTakeawayForm] = useState<TakeawayFormState>(defaultTakeaway);
   const [snapReady, setSnapReady] = useState(false);
@@ -129,9 +130,9 @@ function CheckoutPageContent() {
   const storageKey = "takumaeat:checkout-state";
 
   useEffect(() => {
-    const mode = searchParams?.get("mode") === "takeaway" ? "takeaway" : "delivery";
+    const mode = modeParam === "takeaway" ? "takeaway" : "delivery";
     setOrderType(mode);
-  }, [searchParams]);
+  }, [modeParam]);
 
   useEffect(() => {
     if (sessionStatus === "unauthenticated") {
@@ -188,7 +189,7 @@ function CheckoutPageContent() {
           delivery?: DeliveryFormState;
           takeaway?: TakeawayFormState;
         };
-        if (parsed.orderType) {
+        if (!modeParam && parsed.orderType) {
           setOrderType(parsed.orderType);
         }
         if (parsed.delivery) {
@@ -202,7 +203,7 @@ function CheckoutPageContent() {
       }
     };
     loadInitialState();
-  }, []);
+  }, [modeParam]);
 
   useEffect(() => {
     const persistState = () => {
@@ -311,16 +312,13 @@ function CheckoutPageContent() {
     if (step === "details") {
       setErrorMessage(null);
       setStep("review");
-      return;
-    }
-    if (step === "payment") {
-      setErrorMessage(null);
-      setStep("details");
     }
   };
 
-  const proceedToPayment = () => {
-    if (step !== "details") return;
+  const handlePlaceOrder = async () => {
+    if (step !== "details" || isSubmitting) {
+      return;
+    }
     setErrorMessage(null);
 
     if (orderType === "delivery") {
@@ -333,7 +331,7 @@ function CheckoutPageContent() {
       }
     }
 
-    setStep("payment");
+    await triggerCheckout();
   };
 
   const openThankYouModal = (orderId: string, variant: 'success' | 'pending' | 'cod' | 'error') => {
@@ -385,7 +383,7 @@ function CheckoutPageContent() {
   };
 
   const triggerCheckout = async () => {
-    if (step !== "payment" || isSubmitting) {
+    if (isSubmitting) {
       return;
     }
 
@@ -494,7 +492,6 @@ function CheckoutPageContent() {
     const steps: { key: Step; label: string }[] = [
       { key: "review", label: "Review" },
       { key: "details", label: "Detail Pesanan" },
-      { key: "payment", label: "Pembayaran" },
       { key: "confirmation", label: "Konfirmasi" }
     ];
 
@@ -838,51 +835,6 @@ function CheckoutPageContent() {
     </section>
   );
 
-  const renderPayment = () => (
-    <section className="rounded-3xl border border-[#eadfce] bg-white p-6 shadow-[0_28px_60px_rgba(183,150,111,0.18)]">
-      <header className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#b59c7b]">Pembayaran</p>
-        <h2 className="text-lg font-semibold text-[#1f1a11]">Pilih metode pembayaran dan konfirmasi</h2>
-      </header>
-      <div className="mt-6 space-y-5">
-        <div className="rounded-2xl border border-brand-gold/30 bg-[#fff0d8] p-4">
-          <div className="flex items-center gap-3 text-sm text-[#1f1a11]">
-            <Wallet className="h-5 w-5 text-[#a9792d]" />
-            <div>
-              <p className="font-semibold text-[#8d5814]">Midtrans Snap</p>
-              <p className="text-xs text-[#b9893f]">
-                Setelah klik "Place Order", layar pembayaran Midtrans akan terbuka. Kamu bisa memilih transfer bank, e-wallet, atau kartu kredit.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {!snapReady && orderType === "delivery" && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-600">
-            Midtrans belum siap dimuat. Periksa koneksi internetmu dan coba kembali.
-          </div>
-        )}
-
-        {orderType === "takeaway" && takeawayForm.paymentMethod === "cod" && (
-          <div className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] p-4">
-            <p className="text-sm font-semibold text-[#1f1a11]">Bayar di tempat</p>
-            <p className="text-xs text-[#847766]">
-              Staff akan menyiapkan struk pembayaran di kasir. Pastikan membawa bukti pesanan saat pengambilan.
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-3 text-sm text-[#5c5244]">
-          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[#b59c7b]">Catatan</p>
-          <ul className="space-y-2 text-[12px]">
-            <li>• Kamu akan menerima email & WhatsApp setelah pesanan berhasil dibuat.</li>
-            <li>• Jika transaksi Midtrans tertutup sebelum selesai, kamu bisa mengakses ulang dari halaman riwayat order.</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-  );
-
   const renderSummary = () => (
     <aside className="flex w-full flex-col gap-5 rounded-3xl border border-[#eadfce] bg-white p-6 shadow-[0_28px_60px_rgba(183,150,111,0.18)] lg:sticky lg:top-28 lg:self-start">
       <header className="space-y-1">
@@ -914,7 +866,7 @@ function CheckoutPageContent() {
         </div>
       </div>
       <div className="space-y-3">
-        {step !== "review" && (
+        {step === "details" && (
           <Button
             variant="ghost"
             onClick={backToReview}
@@ -933,16 +885,12 @@ function CheckoutPageContent() {
         )}
         {step === "details" && (
           <Button
-            onClick={proceedToPayment}
-            className="w-full rounded-full bg-brand-gold py-3 text-xs font-semibold uppercase tracking_[0.24em] text-black shadow_[0_24px_56px_rgba(239,176,54,0.42)] hover:shadow_[0_30px_70px_rgba(239,176,54,0.55)]"
-          >
-            Lanjutkan ke pembayaran
-          </Button>
-        )}
-        {step === "payment" && (
-          <Button
-            onClick={triggerCheckout}
-            disabled={(orderType === "delivery" && !snapReady) || isSubmitting}
+            onClick={handlePlaceOrder}
+            disabled={
+              (orderType === "delivery" && !snapReady) ||
+              (orderType === "takeaway" && takeawayForm.paymentMethod === "midtrans" && !snapReady) ||
+              isSubmitting
+            }
             className="w-full rounded-full bg-brand-gold py-3 text-xs font-semibold uppercase tracking_[0.24em] text-black shadow_[0_24px_56px_rgba(239,176,54,0.32)] hover:shadow_[0_30px_70px_rgba(239,176,54,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "Memproses..." : "Place Order"}
@@ -1031,7 +979,6 @@ function CheckoutPageContent() {
             {step !== "review" && (
               <div className="space-y-8">
                 {orderType === "delivery" ? renderDeliveryForm() : renderTakeawayForm()}
-                {step === "payment" && renderPayment()}
               </div>
             )}
           </div>

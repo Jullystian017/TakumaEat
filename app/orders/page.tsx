@@ -172,7 +172,7 @@ export default function OrdersPage() {
     <>
       <Navbar />
       <main className="min-h-screen bg-[#fdf9f1] pb-24 pt-32 text-[#1f1a11]">
-        <section className="mx-auto w-full max-w-5xl px-6">
+        <section className="mx-auto w-full max-w-5xl px-4 sm:px-6">
           <header className="space-y-3 border-b border-[#d0bfa6]/40 pb-6">
             <span className="inline-flex items-center gap-2 rounded-full bg-[#f4e7d6] px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#8d5814]">
               Pesanan Saya
@@ -224,7 +224,7 @@ export default function OrdersPage() {
                 </p>
                 <Button
                   onClick={() => router.push("/menu")}
-                  className="rounded-full bg-brand-gold px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-[0_20px_42px_rgba(239,176,54,0.32)]"
+                  className="w-full rounded-full bg-brand-gold px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-[0_20px_42px_rgba(239,176,54,0.32)] sm:w-auto"
                 >
                   Jelajahi Menu
                 </Button>
@@ -238,7 +238,7 @@ export default function OrdersPage() {
                     key={order.id}
                     className="rounded-3xl border border-[#eadfce] bg-white p-6 shadow-[0_28px_60px_rgba(183,150,111,0.18)]"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#b59c7b]">
                           Pesanan #{order.id.slice(0, 8).toUpperCase()}
@@ -250,7 +250,7 @@ export default function OrdersPage() {
                           Dibuat {formatOrderDate(order.created_at)}
                         </p>
                       </div>
-                      <div className="text-right text-sm text-[#5c5244]">
+                      <div className="text-sm text-[#5c5244] sm:text-right">
                         <p className="font-semibold text-[#1f1a11]">{formatCurrency(order.total_amount)}</p>
                         <p className="text-xs">
                           Pembayaran: {paymentLabels[order.payment_status] ?? order.payment_status}
@@ -259,7 +259,7 @@ export default function OrdersPage() {
                       </div>
                     </div>
 
-                    <div className="mt-6 flex flex-wrap items-center gap-3">
+                    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                       <span className="inline-flex items-center gap-2 rounded-full bg-[#f4e7d6] px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.26em] text-[#8d5814]">
                         {order.order_type === "delivery" ? "Delivery" : "Takeaway"}
                       </span>
@@ -270,7 +270,7 @@ export default function OrdersPage() {
                       )}
                     </div>
 
-                    <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+                    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                       <Link
                         href={`/orders/${order.id}`}
                         className="text-xs font-semibold uppercase tracking-[0.26em] text-[#8d5814] transition-colors hover:text-[#a1691a]"
@@ -280,28 +280,10 @@ export default function OrdersPage() {
                       {order.payment_method === "midtrans" && order.payment_status === "unpaid" && (
                         <Button
                           onClick={() => router.push(`/orders/${order.id}`)}
-                          className="rounded-full bg-brand-gold px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-[0_18px_36px_rgba(239,176,54,0.3)]"
+                          className="w-full rounded-full bg-brand-gold px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-[0_18px_36px_rgba(239,176,54,0.3)] sm:w-auto"
                         >
                           Selesaikan pembayaran
                         </Button>
-                      )}
-                      {process.env.NODE_ENV !== "production" && order.payment_method === "midtrans" && order.payment_status === "unpaid" && (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="ghost"
-                            className="rounded-full border border-[#eadfce] bg-[#fff6eb] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b5d2f] hover:border-brand-gold/60"
-                            onClick={() => handleMockUpdate(order.id, { paymentStatus: "paid", status: "processing" })}
-                          >
-                            Tandai dibayar (mock)
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            className="rounded-full border border-[#eadfce] bg-[#fff6eb] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7b5d2f] hover:border-brand-gold/60"
-                            onClick={() => handleMockUpdate(order.id, { paymentStatus: "failed", status: "cancelled" })}
-                          >
-                            Tandai gagal (mock)
-                          </Button>
-                        </div>
                       )}
                     </div>
                   </article>
