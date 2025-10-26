@@ -2,14 +2,14 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import DashboardClient from './DashboardClient';
+import PromoClient from './PromoClient';
 
 export const metadata: Metadata = {
-  title: 'Admin Dashboard | TakumaEat',
-  description: 'Kelola operasional TakumaEat, termasuk pesanan masuk, menu, dan promosi.'
+  title: 'Promo Management | TakumaEat Admin',
+  description: 'Kelola promo dan diskon TakumaEat'
 };
 
-export default async function AdminDashboardPage() {
+export default async function AdminPromoPage() {
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -25,7 +25,7 @@ export default async function AdminDashboardPage() {
   const userEmail = session.user?.email ?? '';
 
   return (
-    <DashboardClient
+    <PromoClient
       displayName={displayName}
       displayNameInitial={displayNameInitial}
       userEmail={userEmail}
