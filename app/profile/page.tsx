@@ -87,12 +87,7 @@ export default function ProfilePage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-[#fdf9f1] pb-24 pt-32 text-[#1f1a11]">
-        {/* Decorative background elements */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-32 top-32 h-96 w-96 rounded-full bg-[#f4e7d6]/30 blur-3xl" />
-          <div className="absolute -left-32 top-96 h-96 w-96 rounded-full bg-[#fff8ee]/40 blur-3xl" />
-        </div>
+      <main className="min-h-screen bg-white pb-24 pt-32 text-[#1f1a11]">
 
         <section className="relative mx-auto w-full max-w-5xl px-6">
           <header className="space-y-4 border-b border-[#d0bfa6]/40 pb-8">

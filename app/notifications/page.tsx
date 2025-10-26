@@ -170,7 +170,7 @@ export default function NotificationsPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-[#fdf9f1] pb-24 pt-32 text-[#1f1a11]">
+      <main className="min-h-screen bg-white pb-24 pt-32 text-[#1f1a11]">
         <section className="mx-auto w-full max-w-5xl px-4 sm:px-6">
           <header className="flex flex-col gap-6 border-b border-[#d0bfa6]/40 pb-6">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">

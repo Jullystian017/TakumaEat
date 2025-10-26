@@ -171,7 +171,7 @@ export default function OrdersPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-[#fdf9f1] pb-24 pt-32 text-[#1f1a11]">
+      <main className="min-h-screen bg-white pb-24 pt-32 text-[#1f1a11]">
         <section className="mx-auto w-full max-w-5xl px-4 sm:px-6">
           <header className="space-y-3 border-b border-[#d0bfa6]/40 pb-6">
             <span className="inline-flex items-center gap-2 rounded-full bg-[#f4e7d6] px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#8d5814]">

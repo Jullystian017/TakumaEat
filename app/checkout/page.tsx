@@ -925,7 +925,7 @@ function CheckoutPageContent() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-[#fdf9f1] pb-20 pt-24 text-[#1f1a11]">
+      <main className="min-h-screen bg-white pb-20 pt-24 text-[#1f1a11]">
         <section className="mx-auto w-full max-w-6xl px-6">
           <header className="flex flex-col gap-6 border-b border-[#d0bfa6]/40 pb-6">
           <div className="flex items-center gap-4">
@@ -1039,7 +1039,7 @@ function CheckoutPageContent() {
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#fdf9f1]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
       <CheckoutPageContent />
     </Suspense>
   );
