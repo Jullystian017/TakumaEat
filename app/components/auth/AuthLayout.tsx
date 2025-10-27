@@ -38,47 +38,48 @@ export function AuthLayout({
   const imageOnLeft = variant === 'login';
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#fdf9f1] px-4 py-10 text-black sm:px-6 lg:px-10">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#fdf9f1] px-3 py-6 text-black sm:px-6 sm:py-10 lg:px-10">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-32 -left-32 h-[360px] w-[360px] rounded-full bg-brand-gold/20 blur-[140px]" />
         <div className="absolute bottom-[-260px] left-1/2 h-[380px] w-[620px] -translate-x-1/2 rounded-full bg-[#f1d7a4]/35 blur-[160px]" />
         <div className="absolute top-[35%] -right-40 h-[420px] w-[460px] rounded-full bg-[#d6defa]/40 blur-[160px]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-[1180px] overflow-hidden rounded-[36px] border border-white/60 bg-white/95 shadow-[0_28px_96px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+      <div className="relative z-10 w-full max-w-[1180px] overflow-hidden rounded-2xl border border-white/60 bg-white/95 shadow-[0_28px_96px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:rounded-[36px]">
         <div
           className={cn(
             'relative flex flex-col lg:h-full lg:flex-row',
             imageOnLeft ? 'lg:flex-row' : 'lg:flex-row-reverse'
           )}
         >
-          <div className="relative flex w-full flex-col px-7 py-8 sm:px-10 lg:w-[51%] lg:px-14">
-            <div className="flex items-center justify-between gap-6">
-              <div className="flex items-center gap-3">
-                <Image src="/icons/logo2.png" alt="TakumaEat" width={52} height={52} className="h-12 w-12 rounded-full object-cover shadow-lg" />
+          <div className="relative flex w-full flex-col px-5 py-6 sm:px-10 sm:py-8 lg:w-[51%] lg:px-14 lg:py-10">
+            <div className="flex items-center justify-between gap-3 sm:gap-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Image src="/icons/logo2.png" alt="TakumaEat" width={52} height={52} className="h-10 w-10 rounded-full object-cover shadow-lg sm:h-12 sm:w-12" />
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-brand-gold">TakumaEat</p>
-                  <p className="text-sm text-black/60">Japanese Dining Experience</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-brand-gold sm:text-[11px] sm:tracking-[0.28em]">TakumaEat</p>
+                  <p className="text-xs text-black/60 sm:text-sm">Japanese Dining</p>
                 </div>
               </div>
               <Link
                 href="/"
-                className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-4 py-2 text-sm font-medium text-black shadow-sm transition-all duration-200 hover:border-brand-gold/50 hover:bg-black/5"
+                className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white/80 px-3 py-1.5 text-xs font-medium text-black shadow-sm transition-all duration-200 hover:border-brand-gold/50 hover:bg-black/5 sm:gap-2 sm:px-4 sm:py-2 sm:text-sm"
               >
-                <ArrowLeft className="h-4 w-4" />
-                Back To Home
+                <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Back To Home</span>
+                <span className="sm:hidden">Home</span>
               </Link>
             </div>
 
-            <div className="mt-8">
-              <span className="inline-flex items-center gap-2 rounded-full bg-black/5 px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-black/60">
+            <div className="mt-6 sm:mt-8">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-black/5 px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-black/60 sm:gap-2 sm:px-4 sm:text-[10px] sm:tracking-[0.32em]">
                 <span className="inline-block h-2 w-2 rounded-full bg-brand-gold" />
                 {badge}
               </span>
-              <h1 className="mt-6 text-2xl font-semibold tracking-tight text-black sm:text-4xl">
+              <h1 className="mt-4 text-xl font-semibold tracking-tight text-black sm:mt-6 sm:text-2xl lg:text-3xl">
                 {headline}
               </h1>
-              <p className="mt-3 max-w-xl text-sm leading-relaxed text-black/60">{description}</p>
+              <p className="mt-2 max-w-xl text-xs leading-relaxed text-black/60 sm:mt-3 sm:text-sm">{description}</p>
             </div>
 
             <motion.div
@@ -86,12 +87,12 @@ export function AuthLayout({
               initial={{ x: imageOnLeft ? 48 : -48, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-              className="mt-8 flex w-full justify-center"
+              className="mt-6 flex w-full justify-center sm:mt-8"
             >
               <div className="w-full max-w-md space-y-6">{children}</div>
             </motion.div>
 
-            <p className="mt-8 text-center text-sm text-black/55">
+            <p className="mt-6 text-center text-xs text-black/55 sm:mt-8 sm:text-sm">
               {secondaryAction.text}{' '}
               <Link href={secondaryAction.href} className="font-semibold text-brand-gold transition-colors duration-200 hover:text-black">
                 {secondaryAction.label}
