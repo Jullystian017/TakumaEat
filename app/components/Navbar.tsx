@@ -70,6 +70,7 @@ export function Navbar() {
   const isHome = pathname === '/';
   const isTransparent = isHome && !scrolled;
   const isAuthenticated = !!session?.user;
+  const isAdmin = session?.user?.role === 'admin';
   const anyDashboardOpen = desktopDashboardOpen || mobileDashboardOpen;
   const { cartItems, cartItemCount, cartSubtotal, incrementItem, decrementItem, removeItem } = useCart();
 
@@ -330,27 +331,44 @@ export function Navbar() {
                   </Button>
                 </div>
                 <div ref={dashboardDesktopRef} className="relative">
-                  <Button
-                    type="button"
-                    onClick={toggleDesktopDashboard}
-                    className={cn(
-                      'inline-flex items-center gap-2 rounded-full border px-5 py-2 text-sm font-semibold uppercase tracking-[0.08em] transition-all duration-300 hover:-translate-y-0.5',
-                      isTransparent
-                        ? 'border-white/40 bg-white/10 text-white hover:border-white/60 hover:bg-white/20'
-                        : 'border-black/20 bg-white text-black hover:border-brand-gold/50 hover:text-black'
-                    )}
-                  >
-                    <UserRound className="h-4 w-4" />
-                    <span>Dashboard</span>
-                    <ChevronDown
+                  {isAdmin ? (
+                    <Button
+                      asChild
                       className={cn(
-                        'h-4 w-4 transition-transform duration-300',
-                        desktopDashboardOpen && 'rotate-180'
+                        'inline-flex items-center gap-2 rounded-full border px-5 py-2 text-sm font-semibold uppercase tracking-[0.08em] transition-all duration-300 hover:-translate-y-0.5',
+                        isTransparent
+                          ? 'border-white/40 bg-white/10 text-white hover:border-white/60 hover:bg-white/20'
+                          : 'border-black/20 bg-white text-black hover:border-brand-gold/50 hover:text-black'
                       )}
-                    />
-                  </Button>
+                    >
+                      <Link href="/admin/dashboard">
+                        <UserRound className="h-4 w-4" />
+                        <span>Dashboard</span>
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={toggleDesktopDashboard}
+                      className={cn(
+                        'inline-flex items-center gap-2 rounded-full border px-5 py-2 text-sm font-semibold uppercase tracking-[0.08em] transition-all duration-300 hover:-translate-y-0.5',
+                        isTransparent
+                          ? 'border-white/40 bg-white/10 text-white hover:border-white/60 hover:bg-white/20'
+                          : 'border-black/20 bg-white text-black hover:border-brand-gold/50 hover:text-black'
+                      )}
+                    >
+                      <UserRound className="h-4 w-4" />
+                      <span>Dashboard</span>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform duration-300',
+                          desktopDashboardOpen && 'rotate-180'
+                        )}
+                      />
+                    </Button>
+                  )}
                   <AnimatePresence>
-                    {desktopDashboardOpen && (
+                    {!isAdmin && desktopDashboardOpen && (
                       <motion.div
                         key="dashboard-desktop-dropdown"
                         initial={{ opacity: 0, y: -8 }}
@@ -438,23 +456,37 @@ export function Navbar() {
             </div>
 
             <div ref={dashboardMobileRef} className="relative">
-              <button
-                type="button"
-                onClick={toggleMobileDashboard}
-                aria-haspopup="menu"
-                aria-expanded={mobileDashboardOpen}
-                className={cn(
-                  'flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold/50',
-                  isTransparent
-                    ? 'bg-white/10 text-white hover:bg-white/20'
-                    : 'bg-black/5 text-black hover:bg-black/10',
-                  mobileDashboardOpen && 'text-brand-gold'
-                )}
-              >
-                <UserRound className="h-5 w-5" />
-              </button>
+              {isAdmin ? (
+                <Link
+                  href="/admin/dashboard"
+                  className={cn(
+                    'flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold/50',
+                    isTransparent
+                      ? 'bg-white/10 text-white hover:bg-white/20'
+                      : 'bg-black/5 text-black hover:bg-black/10'
+                  )}
+                >
+                  <UserRound className="h-5 w-5" />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={toggleMobileDashboard}
+                  aria-haspopup="menu"
+                  aria-expanded={mobileDashboardOpen}
+                  className={cn(
+                    'flex h-11 w-11 items-center justify-center rounded-full transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold/50',
+                    isTransparent
+                      ? 'bg-white/10 text-white hover:bg-white/20'
+                      : 'bg-black/5 text-black hover:bg-black/10',
+                    mobileDashboardOpen && 'text-brand-gold'
+                  )}
+                >
+                  <UserRound className="h-5 w-5" />
+                </button>
+              )}
               <AnimatePresence>
-                {mobileDashboardOpen && (
+                {!isAdmin && mobileDashboardOpen && (
                   <motion.div
                     key="dashboard-mobile-dropdown"
                     initial={{ opacity: 0, y: -8 }}
