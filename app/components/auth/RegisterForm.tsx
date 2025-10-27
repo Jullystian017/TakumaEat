@@ -180,9 +180,6 @@ export function RegisterForm() {
             />
             <span className="font-semibold uppercase tracking-[0.22em]">Saya setuju dengan syarat & ketentuan</span>
           </label>
-          <p className="text-[11px] uppercase tracking-[0.24em] text-black/40">
-            Data Anda aman bersama kami
-          </p>
         </div>
 
         {error && (
@@ -205,57 +202,9 @@ export function RegisterForm() {
         </Button>
       </form>
 
-      <div className="flex items-center gap-4 text-xs uppercase tracking-[0.24em] text-black/40">
-        <span className="h-px flex-1 bg-black/10" />
-        atau daftar dengan
-        <span className="h-px flex-1 bg-black/10" />
-      </div>
+     
 
-      <div className="flex flex-wrap justify-center items-center gap-3">
-        <button
-          type="button"
-          className="inline-flex flex-1 items-center justify-center gap-3 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold uppercase tracking-[0.24em] text-black/70 transition-all duration-200 hover:border-brand-gold/50 hover:text-black sm:flex-none sm:px-6"
-        >
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
-              <path
-                fill="currentColor"
-                d="M21.35 11.1h-9.18v2.98h5.54c-.24 1.4-.98 2.58-2.09 3.37v2.8h3.38c1.97-1.82 3.11-4.5 3.11-7.68 0-.74-.07-1.45-.2-2.12Z"
-              />
-              <path
-                fill="currentColor"
-                d="M12.17 22c2.83 0 5.21-.94 6.94-2.56l-3.38-2.8c-.94.63-2.14 1-3.56 1-2.74 0-5.06-1.85-5.89-4.35H2.74v2.87C4.46 19.78 7.97 22 12.17 22Z"
-                opacity=".6"
-              />
-              <path
-                fill="currentColor"
-                d="M6.28 13.29c-.21-.63-.33-1.31-.33-2.01 0-.7.12-1.38.33-2.01V6.4H2.74A9.93 9.93 0 0 0 1.5 11.28c0 1.57.37 3.05 1.04 4.36l3.74-2.35Z"
-                opacity=".6"
-              />
-              <path
-                fill="currentColor"
-                d="M12.17 4.58c1.54 0 2.93.53 4.02 1.57l3.01-3.02C17.36 1.2 14.99 0 12.17 0 7.97 0 4.46 2.22 2.74 5.41l3.54 2.87c.83-2.5 3.15-4.35 5.89-4.35Z"
-                opacity=".6"
-              />
-            </svg>
-          </span>
-          Google
-        </button>
-        <button
-          type="button"
-          className="inline-flex flex-1 items-center justify-center gap-3 rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold uppercase tracking-[0.24em] text-black/70 transition-all duration-200 hover:border-brand-gold/50 hover:text-black sm:flex-none sm:px-6"
-        >
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden>
-              <path
-                fill="currentColor"
-                d="M22.68 0H1.32A1.32 1.32 0 0 0 0 1.32v21.36A1.32 1.32 0 0 0 1.32 24h11.5v-9.28H9.69v-3.62h3.13V8.41c0-3.1 1.89-4.8 4.66-4.8 1.33 0 2.71.24 2.71.24v2.98h-1.53c-1.5 0-1.97.93-1.97 1.89v2.26h3.35l-.53 3.62h-2.82V24h5.53A1.32 1.32 0 0 0 24 22.68V1.32A1.32 1.32 0 0 0 22.68 0Z"
-              />
-            </svg>
-          </span>
-          Facebook
-        </button>
-      </div>
+      
     </>
   );
 }

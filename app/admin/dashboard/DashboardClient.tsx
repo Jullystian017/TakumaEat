@@ -1,13 +1,17 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
   Bell,
   Coins,
   LayoutDashboard,
+  LogOut,
   Megaphone,
   Settings,
   ShoppingCart,
@@ -30,6 +34,10 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ displayName, displayNameInitial, userEmail }: DashboardClientProps) {
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
+
   function formatCurrency(value: number) {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -37,6 +45,26 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
       maximumFractionDigits: 0
     }).format(value);
   }
+
+  const handleLogout = async () => {
+    await signOut({ redirect: true, callbackUrl: '/login' });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    if (profileDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [profileDropdownOpen]);
 
   const navItems: { label: string; href: string; icon: LucideIcon }[] = [
     { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
@@ -171,15 +199,38 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
               >
                 <Bell className="h-5 w-5" />
               </button>
-              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#EFB036] to-[#d89a28] text-sm font-bold text-white shadow-md">
-                  {displayNameInitial}
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-sm font-semibold text-slate-900">{displayName}</p>
-                  <p className="text-xs text-slate-500">{userEmail}</p>
-                </div>
-              </div>
+              <div ref={profileDropdownRef} className="relative">
+  <button
+    type="button"
+    onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all hover:bg-slate-50 hover:shadow-md cursor-pointer w-full"
+  >
+    {/* Nama dan email di kiri */}
+    <div className="flex flex-col text-left">
+      <p className="text-sm font-semibold text-slate-900">{displayName}</p>
+      <p className="text-xs text-slate-500">{userEmail}</p>
+    </div>
+
+    {/* Inisial di kanan */}
+    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#EFB036] to-[#d89a28] text-sm font-bold text-white shadow-md">
+      {displayNameInitial}
+    </div>
+  </button>
+
+  {profileDropdownOpen && (
+    <div className="absolute right-0 mt-2 w-48 origin-top-right overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg z-50">
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+      >
+        <LogOut className="h-4 w-4" />
+        <span>Logout</span>
+      </button>
+    </div>
+  )}
+</div>
+
             </div>
           </div>
         </header>

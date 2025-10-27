@@ -75,7 +75,7 @@ export function AuthLayout({
                 <span className="inline-block h-2 w-2 rounded-full bg-brand-gold" />
                 {badge}
               </span>
-              <h1 className="mt-6 text-3xl font-semibold tracking-tight text-black sm:text-4xl">
+              <h1 className="mt-6 text-2xl font-semibold tracking-tight text-black sm:text-4xl">
                 {headline}
               </h1>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-black/60">{description}</p>
