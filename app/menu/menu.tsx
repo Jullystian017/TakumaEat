@@ -11,10 +11,16 @@ import { Footer } from '@/app/components/Footer';
 import { PromoMarquee } from '@/app/components/PromoMarquee';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useCart } from '@/app/context/CartContext';
 
 const categories = ['All', 'Sushi & Rolls', 'Ramen & Udon', 'Bento', 'Dessert', 'Drink'] as const;
 
 type Category = (typeof categories)[number];
+
+// Helper function to convert price string (e.g., "Rp 365.000") to number
+const parsePriceString = (priceStr: string): number => {
+  return Number(priceStr.replace(/[^0-9]/g, ''));
+};
 
 type MenuItem = {
   id: number;
@@ -35,7 +41,7 @@ const menuItems: MenuItem[] = [
     price: 'Rp 365.000',
     description: '12 potong nigiri premium dengan seasonal catch, brushed soy, dan garnish berlapis emas.',
     image:
-      'https://images.unsplash.com/photo-1617196034796-73dfa7b1d924?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1540713304937-18ad930d3594?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1170',
     highlights: ['Chef Signature', 'Limited 18 servings/day', 'Paired with ginjo shoyu'],
     calories: '420 kkal'
   },
@@ -46,7 +52,7 @@ const menuItems: MenuItem[] = [
     price: 'Rp 189.000',
     description: 'Roll gurita panggang, otoro tartare, dan saus yuzu miso dengan tobiko emas.',
     image:
-      'https://images.unsplash.com/photo-1544378730-8b5104a1c38e?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1657662378832-a22aebb16873?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDZ8fHxlbnwwfHx8fHw%3D&auto=format&fit=crop&q=60&w=600',
     highlights: ['Smoked Octopus', 'Yuzu miso glaze', 'Crunchy tempura'],
     calories: '360 kkal'
   },
@@ -57,7 +63,7 @@ const menuItems: MenuItem[] = [
     price: 'Rp 185.000',
     description: 'Kuah tonkotsu 18 jam, burnt black garlic oil, chashu torched, dan ramen handmade.',
     image:
-      'https://images.unsplash.com/photo-1598213925675-863792b6ac3f?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1618889482923-38250401a84e?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1170',
     highlights: ['18h simmer', 'Onsen egg', 'Wood ear crunch'],
     calories: '540 kkal'
   },
@@ -123,7 +129,7 @@ const menuItems: MenuItem[] = [
     price: 'Rp 68.000',
     description: 'Cold brew single origin Kyoto, cascara syrup, dan ice sphere citrus.',
     image:
-      'https://images.unsplash.com/photo-1461988625982-7e46a099bf4c?q=80&w=1200&auto=format&fit=crop',
+      'https://images.unsplash.com/photo-1613503399741-4cd0ed8fbce2?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687',
     highlights: ['24h brew', 'Cascara syrup', 'Citrus mist'],
     calories: '90 kkal'
   },
@@ -141,6 +147,7 @@ const menuItems: MenuItem[] = [
 ];
 
 export default function MenuPage() {
+  const { addItem } = useCart();
   const [activeCategory, setActiveCategory] = useState<Category>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -356,6 +363,12 @@ export default function MenuPage() {
                           className="flex items-center gap-1.5 bg-gradient-to-r from-brand-gold to-amber-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-black shadow-[0_20px_45px_rgba(239,176,54,0.35)] transition-transform duration-300 hover:-translate-y-1"
                           onClick={(event) => {
                             event.stopPropagation();
+                            addItem({
+                              name: item.name,
+                              price: parsePriceString(item.price),
+                              image: item.image,
+                              note: item.description
+                            });
                           }}
                         >
                           <ShoppingCart className="h-4 w-4" />
@@ -488,7 +501,18 @@ export default function MenuPage() {
                       <span className="text-white/60">Harga</span>
                       <span className="text-brand-gold">{selectedItem.price}</span>
                     </div>
-                    <Button className="flex items-center justify-center gap-2 bg-brand-gold px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-black shadow-[0_25px_55px_rgba(239,176,54,0.45)]">
+                    <Button 
+                      className="flex items-center justify-center gap-2 bg-brand-gold px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-black shadow-[0_25px_55px_rgba(239,176,54,0.45)]"
+                      onClick={() => {
+                        addItem({
+                          name: selectedItem.name,
+                          price: parsePriceString(selectedItem.price),
+                          image: selectedItem.image,
+                          note: selectedItem.description
+                        });
+                        setSelectedItem(null);
+                      }}
+                    >
                       <ShoppingCart className="h-5 w-5" /> Tambah ke Keranjang
                     </Button>
                   </div>
