@@ -380,6 +380,7 @@ function CheckoutPageContent() {
 
   const handleCloseModal = () => {
     setShowThankYouModal(false);
+    router.push('/');
   };
 
   const triggerCheckout = async () => {
@@ -1019,7 +1020,7 @@ function CheckoutPageContent() {
                 className="flex-1 rounded-full border border-[#eadfce] bg-white px-5 py-3 text-sm font-semibold text-[#7b5d2f] hover:bg-[#f4e7d6] sm:flex-none sm:px-6"
                 onClick={handleCloseModal}
               >
-                Nanti saja
+                Ke Beranda
               </Button>
               <Button
                 className="flex-1 rounded-full bg-[#c7812e] px-6 py-3 text-sm font-semibold text-white shadow-[0_22px_45px_rgba(199,129,46,0.42)] transition-transform hover:-translate-y-0.5 hover:bg-[#d8913f] sm:flex-none"
