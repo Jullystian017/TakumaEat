@@ -17,23 +17,26 @@ export async function PATCH(
         const { id } = params;
         const body = await request.json();
 
-        // If stock is updated, ensure status is synced if status is not explicitly provided
-        if (body.stock !== undefined && body.status === undefined) {
-            body.status = body.stock > 0 ? 'available' : 'out_of_stock';
+        // Buang data categories dan id agar tidak menyebabkan error "Column not found"
+        const { categories, id: _, ...updateData } = body;
+
+        // If stock is updated, ensure status is synced
+        if (updateData.stock !== undefined && updateData.status === undefined) {
+            updateData.status = updateData.stock > 0 ? 'available' : 'out_of_stock';
         }
 
-        const { data, error } = await supabaseAdminClient
+        const { data: order, error: updateError } = await supabaseAdminClient
             .from('menu_items')
-            .update(body)
+            .update(updateData)
             .eq('id', id)
             .select()
             .single();
 
-        if (error) {
-            return NextResponse.json({ message: error.message }, { status: 500 });
+        if (updateError) {
+            return NextResponse.json({ message: updateError.message }, { status: 500 });
         }
 
-        return NextResponse.json({ menuItem: data });
+        return NextResponse.json({ menuItem: order });
     } catch (error) {
         return NextResponse.json({ message: 'Unexpected error' }, { status: 500 });
     }

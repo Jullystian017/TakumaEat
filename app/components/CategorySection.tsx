@@ -163,9 +163,6 @@ export function CategorySection() {
                         {category.description || 'Eksplorasi menu unggulan TakumaEat dengan cita rasa autentik, bahan premium, dan presentasi modern.'}
                       </p>
                       <div className="mt-5 flex flex-wrap items-center gap-2 text-[9px] uppercase tracking-[0.32em] text-white/55 sm:mt-6 sm:gap-3 sm:text-[10px]">
-                        <span className="rounded-full border border-white/20 px-4 py-1">Premium</span>
-                        <span className="rounded-full border border-white/20 px-4 py-1">Chef Choice</span>
-                        <span className="rounded-full border border-white/20 px-4 py-1">Seasonal</span>
                       </div>
                       <div className="mt-5 flex flex-wrap items-center gap-3 sm:mt-6 sm:gap-4">
                         <Button className="rounded-full bg-brand-gold px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-black shadow-[0_15px_35px_rgba(239,176,54,0.42)] transition-transform duration-300 hover:-translate-y-0.5 sm:px-6 sm:text-xs">

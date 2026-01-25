@@ -8,7 +8,13 @@ export async function GET() {
     try {
         const { data, error } = await supabaseAdminClient
             .from('menu_items')
-            .select('*, categories(name, icon)')
+            .select(`
+                *,
+                categories:category_id (
+                    name,
+                    icon
+                )
+            `)
             .order('name');
 
         if (error) {
