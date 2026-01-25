@@ -6,21 +6,37 @@ import { motion } from 'framer-motion';
 
 import { Button } from '@/components/ui/button';
 
-const categories = [
-  { name: 'Sushi & Rolls', image: 'https://images.unsplash.com/photo-1590987337605-84f3ed4dc29f?q=80&w=1170&auto=format&fit=crop' },
-  { name: 'Ramen & Udon', image: 'https://images.unsplash.com/photo-1623341214825-9f4f963727da?q=80&w=1170&auto=format&fit=crop' },
-  { name: 'Bento', image: 'https://images.unsplash.com/photo-1596463059283-da257325bab8?q=80&w=1170&auto=format&fit=crop' },
-  { name: 'Donburi', image: 'https://images.unsplash.com/photo-1732187582879-3ca83139c1b8?q=80&w=1170&auto=format&fit=crop' },
-  { name: 'Side Dish', image: 'https://images.unsplash.com/photo-1541529086526-db283c563270?q=80&w=1170&auto=format&fit=crop' },
-  { name: 'Drink', image: 'https://images.unsplash.com/photo-1544145945-f90425340c7e?q=80&w=1170&auto=format&fit=crop' }
-];
+interface Category {
+  id: string;
+  name: string;
+  description: string;
+  image_url: string | null;
+  color: string;
+  icon: string;
+}
 
 export function CategorySection() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const total = categories.length;
 
   useEffect(() => {
+    async function fetchCategories() {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (data.categories) setCategories(data.categories);
+      } catch (err) {
+        console.error('Fetch categories error:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCategories();
+
     const mediaQuery = window.matchMedia('(max-width: 767px)');
     const handleChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
 
@@ -64,32 +80,43 @@ export function CategorySection() {
           </p>
         </div>
 
-        <div className="mb-10 flex flex-wrap items-center justify-center gap-2 text-black sm:mb-12 sm:gap-3">
-          {categories.map((category, index) => (
-            <button
-              key={category.name}
-              onClick={() => goToCategory(index)}
-              aria-pressed={index === currentIndex}
-              className={`group relative whitespace-nowrap rounded-full text-xs font-semibold uppercase tracking-[0.14em] transition-all duration-300 sm:text-sm sm:tracking-[0.16em] ${
-                index === currentIndex
-                  ? 'bg-gradient-to-r from-brand-gold to-[#ffe28a] px-6 py-3 text-black shadow-[0_16px_32px_rgba(239,176,54,0.48)] ring-2 ring-brand-gold/80 ring-offset-2 ring-offset-white sm:px-8 sm:py-4'
-                  : 'border border-black/15 bg-white/60 px-5 py-2.5 text-black/60 shadow-sm hover:border-brand-gold hover:bg-brand-gold/15 hover:text-black sm:px-6 sm:py-3'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  className={`h-2 w-2 rounded-full transition-colors duration-300 ${
-                    index === currentIndex ? 'bg-black' : 'bg-black/30 group-hover:bg-brand-gold'
+        {loading ? (
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-10 w-24 bg-slate-100 animate-pulse rounded-full" />)}
+          </div>
+        ) : categories.length === 0 ? null : (
+          <div className="mb-10 flex flex-wrap items-center justify-center gap-2 text-black sm:mb-12 sm:gap-3">
+            {categories.map((category, index) => (
+              <button
+                key={category.id}
+                onClick={() => goToCategory(index)}
+                aria-pressed={index === currentIndex}
+                className={`group relative whitespace-nowrap rounded-full text-xs font-semibold uppercase tracking-[0.14em] transition-all duration-300 sm:text-sm sm:tracking-[0.16em] ${index === currentIndex
+                    ? 'bg-gradient-to-r from-brand-gold to-[#ffe28a] px-6 py-3 text-black shadow-[0_16px_32px_rgba(239,176,54,0.48)] ring-2 ring-brand-gold/80 ring-offset-2 ring-offset-white sm:px-8 sm:py-4'
+                    : 'border border-black/15 bg-white/60 px-5 py-2.5 text-black/60 shadow-sm hover:border-brand-gold hover:bg-brand-gold/15 hover:text-black sm:px-6 sm:py-3'
                   }`}
-                />
-                {category.name}
-              </span>
-            </button>
-          ))}
-        </div>
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`h-2 w-2 rounded-full transition-colors duration-300 ${index === currentIndex ? 'bg-black' : 'bg-black/30 group-hover:bg-brand-gold'
+                      }`}
+                  />
+                  {category.name}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="relative mx-auto flex h-[420px] w-full max-w-5xl items-center justify-center sm:h-[480px]">
-          {categories.map((category, index) => {
+          {loading ? (
+            <div className="h-full w-full max-w-md bg-slate-100 animate-pulse rounded-[32px]" />
+          ) : categories.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-slate-400">
+              <span className="text-4xl mb-4">🍱</span>
+              <p className="font-bold">Segera hadir koleksi spesial kami.</p>
+            </div>
+          ) : categories.map((category, index) => {
             const position = positionMap[index];
             if (!position) return null;
 
@@ -97,7 +124,7 @@ export function CategorySection() {
 
             return (
               <motion.div
-                key={category.name}
+                key={category.id}
                 layout
                 initial={false}
                 animate={{ x: position.x, scale: position.scale, opacity: position.opacity }}
@@ -106,12 +133,11 @@ export function CategorySection() {
                 className="absolute inset-0 flex items-center justify-center px-1 sm:px-0"
               >
                 <div
-                  className={`group relative h-full w-full overflow-hidden rounded-[28px] border border-black/5 bg-black/5 shadow-[0_24px_60px_rgba(15,23,42,0.14)] transition-all duration-500 sm:rounded-[32px] ${
-                    isActive ? '' : position.blur
-                  }`}
+                  className={`group relative h-full w-full overflow-hidden rounded-[28px] border border-black/5 bg-black/5 shadow-[0_24px_60px_rgba(15,23,42,0.14)] transition-all duration-500 sm:rounded-[32px] ${isActive ? '' : position.blur
+                    }`}
                 >
                   <Image
-                    src={category.image}
+                    src={category.image_url || 'https://images.unsplash.com/photo-1590987337605-84f3ed4dc29f?q=80&w=1170&auto=format&fit=crop'}
                     alt={category.name}
                     fill
                     className="object-cover transition-transform duration-[1400ms] group-hover:scale-105"
@@ -134,7 +160,7 @@ export function CategorySection() {
                       <p className="text-[11px] uppercase tracking-[0.34em] text-white/45 sm:text-xs">Signature Category</p>
                       <p className="mt-2 text-2xl font-semibold tracking-[0.18em] sm:mt-3 sm:text-4xl">{category.name}</p>
                       <p className="mt-3 text-xs leading-relaxed text-white/70 sm:mt-4 sm:text-sm">
-                        Eksplorasi menu unggulan TakumaEat dengan cita rasa autentik, bahan premium, dan presentasi modern dari chef kami.
+                        {category.description || 'Eksplorasi menu unggulan TakumaEat dengan cita rasa autentik, bahan premium, dan presentasi modern.'}
                       </p>
                       <div className="mt-5 flex flex-wrap items-center gap-2 text-[9px] uppercase tracking-[0.32em] text-white/55 sm:mt-6 sm:gap-3 sm:text-[10px]">
                         <span className="rounded-full border border-white/20 px-4 py-1">Premium</span>

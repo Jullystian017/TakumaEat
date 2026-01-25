@@ -9,6 +9,7 @@ export async function GET() {
         const { data, error } = await supabaseAdminClient
             .from('categories')
             .select('*')
+            .order('priority', { ascending: false })
             .order('name');
 
         if (error) {
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
         }
 
-        const { name, description, color, icon } = await request.json();
+        const { name, description, color, icon, image_url, priority } = await request.json();
 
         if (!name) {
             return NextResponse.json({ message: 'Name is required' }, { status: 400 });
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
 
         const { data, error } = await supabaseAdminClient
             .from('categories')
-            .insert([{ name, description, color, icon }])
+            .insert([{ name, description, color, icon, image_url, priority: priority || 0 }])
             .select()
             .single();
 

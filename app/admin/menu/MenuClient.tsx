@@ -42,6 +42,8 @@ interface Category {
   description: string;
   color: string;
   icon: string;
+  image_url?: string;
+  priority?: number;
   itemCount?: number;
 }
 
@@ -81,7 +83,9 @@ export default function MenuClient({ displayName, displayNameInitial, userEmail 
     name: '',
     description: '',
     color: '#EFB036',
-    icon: '🍽️'
+    icon: '🍽️',
+    image_url: '',
+    priority: 0
   });
 
   async function refreshData() {
@@ -285,13 +289,13 @@ export default function MenuClient({ displayName, displayNameInitial, userEmail 
             </>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#EFB036', icon: '🍽️' }); setIsCategoryModalOpen(true); }} className="h-40 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-brand-gold hover:text-brand-gold transition-all"><Plus /> Tambah Kategori</button>
+              <button onClick={() => { setEditingCategory(null); setCategoryForm({ name: '', description: '', color: '#EFB036', icon: '🍽️', image_url: '', priority: 0 }); setIsCategoryModalOpen(true); }} className="h-40 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-brand-gold hover:text-brand-gold transition-all"><Plus /> Tambah Kategori</button>
               {categories.map(cat => (
                 <div key={cat.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col items-center">
                   <div className="text-4xl mb-4 p-4 rounded-full" style={{ backgroundColor: `${cat.color}15` }}>{cat.icon}</div>
                   <h3 className="font-bold">{cat.name}</h3>
                   <div className="mt-4 flex gap-2 w-full">
-                    <button onClick={() => { setEditingCategory(cat); setCategoryForm(cat); setIsCategoryModalOpen(true); }} className="flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-colors hover:bg-slate-50">Edit</button>
+                    <button onClick={() => { setEditingCategory(cat); setCategoryForm({ name: cat.name, description: cat.description, color: cat.color, icon: cat.icon, image_url: cat.image_url || '', priority: cat.priority || 0 }); setIsCategoryModalOpen(true); }} className="flex-1 py-2 rounded-lg border border-slate-200 text-xs font-bold transition-colors hover:bg-slate-50">Edit</button>
                     <button onClick={() => handleDeleteItem(cat.id, 'category')} className="px-3 py-2 rounded-lg border border-red-100 text-red-500 transition-colors hover:bg-red-50"><Trash2 className="h-3 w-3" /></button>
                   </div>
                 </div>
@@ -342,7 +346,9 @@ export default function MenuClient({ displayName, displayNameInitial, userEmail 
             </div>
             <div className="space-y-4 mb-6">
               <div><label className="text-xs font-bold text-slate-400 uppercase">Nama Kategori</label><input type="text" required value={categoryForm.name} onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })} className="w-full h-11 border border-slate-200 rounded-lg px-4 mt-1" /></div>
-              <div><label className="text-xs font-bold text-slate-400 uppercase">Deskripsi</label><textarea value={categoryForm.description} onChange={e => setCategoryForm({ ...categoryForm, description: e.target.value })} className="w-full h-20 border border-slate-200 rounded-lg p-4 mt-1"></textarea></div>
+              <div><label className="text-xs font-bold text-slate-400 uppercase">Deskripsi (Singkat)</label><textarea value={categoryForm.description} onChange={e => setCategoryForm({ ...categoryForm, description: e.target.value })} className="w-full h-20 border border-slate-200 rounded-lg p-4 mt-1"></textarea></div>
+              <div><label className="text-xs font-bold text-slate-400 uppercase">Image URL (For Homepage)</label><input type="text" value={categoryForm.image_url} onChange={e => setCategoryForm({ ...categoryForm, image_url: e.target.value })} className="w-full h-11 border border-slate-200 rounded-lg px-4 mt-1" placeholder="https://images.unsplash.com/..." /></div>
+              <div><label className="text-xs font-bold text-slate-400 uppercase">Priority (Higher numbers appear first)</label><input type="number" value={categoryForm.priority} onChange={e => setCategoryForm({ ...categoryForm, priority: Number(e.target.value) })} className="w-full h-11 border border-slate-200 rounded-lg px-4 mt-1" /></div>
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase">Icon</label>
                 <div className="grid grid-cols-6 gap-2 mt-1">{iconOptions.map(icon => <button key={icon} type="button" onClick={() => setCategoryForm({ ...categoryForm, icon })} className={cn("h-10 border border-slate-100 rounded-lg flex items-center justify-center grayscale hover:grayscale-0", categoryForm.icon === icon && 'border-brand-gold bg-brand-gold/10 grayscale-0')}>{icon}</button>)}</div>
