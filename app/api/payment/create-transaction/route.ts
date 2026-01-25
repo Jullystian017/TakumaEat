@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdminClient } from '@/lib/supabase/admin';
 
-const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY ?? 'SB-Mid-server-5gd9KJVkX4lOk1dBR8-d1Boa';
+const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
 const MIDTRANS_BASE_URL = process.env.MIDTRANS_BASE_URL ?? 'https://app.sandbox.midtrans.com';
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
