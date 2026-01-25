@@ -129,6 +129,41 @@ export async function POST(request: Request) {
         previousOrderStatus: order.status,
         nextStatuses
       });
+
+      // 3. Create notification for the user
+      try {
+        const { data: orderData } = await supabaseAdminClient
+          .from('orders')
+          .select('user_id, order_number')
+          .eq('id', order.id)
+          .single();
+
+        if (orderData) {
+          let title = 'Update Pembayaran';
+          let description = `Status pembayaran pesanan ${orderData.order_number} telah diperbarui menjadi ${nextStatuses.paymentStatus}.`;
+
+          if (nextStatuses.paymentStatus === 'paid') {
+            title = 'Pembayaran Berhasil!';
+            description = `Terima kasih! Pembayaran untuk pesanan ${orderData.order_number} telah kami terima.`;
+          } else if (nextStatuses.paymentStatus === 'failed' || nextStatuses.paymentStatus === 'expired') {
+            title = 'Pembayaran Gagal';
+            description = `Maaf, pembayaran untuk pesanan ${orderData.order_number} tidak berhasil atau telah kadaluarsa.`;
+          }
+
+          await supabaseAdminClient
+            .from('notifications')
+            .insert([{
+              user_id: orderData.user_id,
+              title,
+              description,
+              category: 'payment',
+              status: 'unread',
+              action_url: `/orders/${order.id}`
+            }]);
+        }
+      } catch (notifErr) {
+        console.error('[midtrans] failed to create notification', notifErr);
+      }
     }
 
     return NextResponse.json({ success: true }, { status: 200 });

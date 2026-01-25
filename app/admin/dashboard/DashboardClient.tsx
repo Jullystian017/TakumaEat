@@ -23,9 +23,13 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  Tag
+  Tag,
+  Menu,
+  X
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AnimatePresence, motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface DashboardClientProps {
   displayName: string;
@@ -35,8 +39,29 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ displayName, displayNameInitial, userEmail }: DashboardClientProps) {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
+
+  // Stats State
+  const [stats, setStats] = useState<any>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        setLoadingStats(true);
+        const res = await fetch('/api/admin/stats');
+        const data = await res.json();
+        if (data.stats) setStats(data.stats);
+      } catch (err) {
+        console.error('Stats fetch error:', err);
+      } finally {
+        setLoadingStats(false);
+      }
+    }
+    fetchStats();
+  }, []);
 
   function formatCurrency(value: number) {
     return new Intl.NumberFormat('id-ID', {
@@ -80,30 +105,30 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
   const statCards: { label: string; value: string; change: string; isPositive: boolean; icon: LucideIcon }[] = [
     {
       label: 'Total Orders',
-      value: '1,284',
-      change: '+12.5%',
-      isPositive: true,
+      value: stats?.totalOrders?.value?.toString() || '0',
+      change: stats?.totalOrders?.change || '0%',
+      isPositive: stats?.totalOrders?.isPositive ?? true,
       icon: ShoppingCart
     },
     {
       label: 'Revenue',
-      value: formatCurrency(182_600_000),
-      change: '+18.2%',
-      isPositive: true,
+      value: formatCurrency(stats?.revenue?.value || 0),
+      change: stats?.revenue?.change || '0%',
+      isPositive: stats?.revenue?.isPositive ?? true,
       icon: Coins
     },
     {
       label: 'New Customers',
-      value: '342',
-      change: '+8.1%',
-      isPositive: true,
+      value: stats?.newCustomers?.value?.toString() || '0',
+      change: stats?.newCustomers?.change || '0%',
+      isPositive: stats?.newCustomers?.isPositive ?? true,
       icon: Users
     },
     {
       label: 'Rata-rata Order',
-      value: formatCurrency(142_200),
-      change: '-2.4%',
-      isPositive: false,
+      value: formatCurrency(stats?.revenue?.value ? stats.revenue.value / (stats.totalOrders?.value || 1) : 0),
+      change: '0%',
+      isPositive: true,
       icon: TrendingUp
     }
   ];
@@ -157,16 +182,14 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
               <Link
                 key={item.label}
                 href={item.href}
-                className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
-                  isActive
-                    ? 'bg-[#EFB036]/10 text-slate-900'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${isActive
+                  ? 'bg-[#EFB036]/10 text-slate-900'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
               >
                 <item.icon
-                  className={`h-4 w-4 transition-colors duration-200 ${
-                    isActive ? 'text-[#EFB036]' : 'text-[#EFB036] group-hover:text-[#f6c15d]'
-                  }`}
+                  className={`h-4 w-4 transition-colors duration-200 ${isActive ? 'text-[#EFB036]' : 'text-[#EFB036] group-hover:text-[#f6c15d]'
+                    }`}
                 />
                 <span>{item.label}</span>
               </Link>
@@ -186,10 +209,19 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-6 py-5 backdrop-blur lg:px-10">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-[#EFB036]">Dashboard Admin</p>
-              <h1 className="mt-2 text-2xl font-semibold md:text-3xl">Selamat datang kembali, {displayName}</h1>
-              <p className="mt-2 text-sm text-slate-600">
-                Monitor performa operasional TakumaEat secara real-time dan ambil keputusan bisnis dengan cepat.
+              <div className="flex items-center gap-3 lg:hidden mb-2">
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="p-2 -ml-2 rounded-lg hover:bg-slate-100"
+                >
+                  <Menu className="h-6 w-6 text-slate-600" />
+                </button>
+                <p className="text-xs uppercase tracking-[0.3em] text-[#EFB036]">Dashboard Admin</p>
+              </div>
+              <p className="hidden lg:block text-xs uppercase tracking-[0.3em] text-[#EFB036]">Dashboard Admin</p>
+              <h1 className="mt-1 text-xl font-semibold md:text-3xl">Selamat datang, {displayName}</h1>
+              <p className="mt-1 text-xs md:text-sm text-slate-600">
+                Monitor performa operasional TakumaEat secara real-time.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -200,36 +232,36 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
                 <Bell className="h-5 w-5" />
               </button>
               <div ref={profileDropdownRef} className="relative">
-  <button
-    type="button"
-    onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all hover:bg-slate-50 hover:shadow-md cursor-pointer w-full"
-  >
-    {/* Nama dan email di kiri */}
-    <div className="flex flex-col text-left">
-      <p className="text-sm font-semibold text-slate-900">{displayName}</p>
-      <p className="text-xs text-slate-500">{userEmail}</p>
-    </div>
+                <button
+                  type="button"
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all hover:bg-slate-50 hover:shadow-md cursor-pointer w-full"
+                >
+                  {/* Nama dan email di kiri */}
+                  <div className="flex flex-col text-left">
+                    <p className="text-sm font-semibold text-slate-900">{displayName}</p>
+                    <p className="text-xs text-slate-500">{userEmail}</p>
+                  </div>
 
-    {/* Inisial di kanan */}
-    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#EFB036] to-[#d89a28] text-sm font-bold text-white shadow-md">
-      {displayNameInitial}
-    </div>
-  </button>
+                  {/* Inisial di kanan */}
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#EFB036] to-[#d89a28] text-sm font-bold text-white shadow-md">
+                    {displayNameInitial}
+                  </div>
+                </button>
 
-  {profileDropdownOpen && (
-    <div className="absolute right-0 mt-2 w-48 origin-top-right overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg z-50">
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
-      >
-        <LogOut className="h-4 w-4" />
-        <span>Logout</span>
-      </button>
-    </div>
-  )}
-</div>
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 origin-top-right overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg z-50">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
             </div>
           </div>
@@ -383,13 +415,12 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
                         </td>
                         <td className="px-6 py-4">
                           <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                              order.status === 'Completed'
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : order.status === 'Processing'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-amber-100 text-amber-700'
-                            }`}
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${order.status === 'Completed'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : order.status === 'Processing'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-amber-100 text-amber-700'
+                              }`}
                           >
                             {order.status}
                           </span>
@@ -409,6 +440,53 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
           </section>
         </main>
       </div>
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm lg:hidden"
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 z-[70] w-72 bg-white px-6 py-10 lg:hidden shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-10">
+                <div className="flex items-center gap-3 text-slate-900">
+                  <div className="relative h-10 w-10"><Image src="/logotakuma.png" alt="Logo" fill className="object-contain" /></div>
+                  <p className="text-lg font-bold">Admin Hub</p>
+                </div>
+                <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-full bg-slate-50 text-slate-400 hover:text-red-500">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <nav className="space-y-1">
+                {navItems.map((item) => (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-4 rounded-2xl px-5 py-4 text-sm font-bold transition-all",
+                      item.href === '/admin/dashboard' ? 'bg-[#EFB036] text-black shadow-lg shadow-[#EFB036]/20' : 'text-slate-500 hover:bg-slate-50'
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

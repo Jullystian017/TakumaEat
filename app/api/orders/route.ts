@@ -193,11 +193,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: orderError.message ?? 'Failed to create order' }, { status: 500 });
     }
 
-    if (!orderData?.id) {
-      console.error('[orders] insert returned empty data');
-      return NextResponse.json({ message: 'Failed to create order' }, { status: 500 });
+    // --- STOCK CHECK & DEDUCTION ---
+    for (const item of body.cartItems) {
+      // Find the menu item to check stock
+      const { data: menuItem, error: fetchItemError } = await supabaseAdminClient
+        .from('menu_items')
+        .select('id, name, stock')
+        .eq('name', item.name) // Using name as identifier if UUID is not yet in cart
+        .single();
+
+      if (fetchItemError || !menuItem) {
+        return NextResponse.json({ message: `Menu item ${item.name} not found` }, { status: 404 });
+      }
+
+      if (menuItem.stock < item.quantity) {
+        return NextResponse.json({ message: `Stok ${item.name} tidak mencukupi (Tersisa: ${menuItem.stock})` }, { status: 400 });
+      }
+
+      // Deduct stock
+      const { error: updateStockError } = await supabaseAdminClient
+        .from('menu_items')
+        .update({
+          stock: menuItem.stock - item.quantity,
+          status: menuItem.stock - item.quantity === 0 ? 'out_of_stock' : 'available'
+        })
+        .eq('id', menuItem.id);
+
+      if (updateStockError) {
+        return NextResponse.json({ message: `Failed to update stock for ${item.name}` }, { status: 500 });
+      }
     }
 
+    // --- INSERT ORDER ITEMS ---
     const orderItemsPayload = body.cartItems.map((item) => ({
       order_id: orderData.id,
       name: item.name,
@@ -209,8 +236,18 @@ export async function POST(request: Request) {
     const { error: itemsError } = await supabaseAdminClient.from('order_items').insert(orderItemsPayload);
 
     if (itemsError) {
+      console.error('[orders] items insert failed', itemsError);
       return NextResponse.json({ message: 'Failed to store order items' }, { status: 500 });
     }
+
+    // --- CREATE NOTIFICATION ---
+    await supabaseAdminClient.from('notifications').insert({
+      user_id: session.user.id,
+      title: 'Pesanan Dibuat',
+      description: `Pesanan #${orderData.id.slice(0, 8).toUpperCase()} berhasil dibuat. Segera lakukan pembayaran.`,
+      category: 'order',
+      action_url: `/orders/${orderData.id}`
+    });
 
     if (body.paymentMethod === 'midtrans') {
       if (!process.env.MIDTRANS_SERVER_KEY) {

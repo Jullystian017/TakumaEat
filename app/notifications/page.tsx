@@ -133,9 +133,18 @@ export default function NotificationsPage() {
     }
 
     const loadNotifications = async () => {
-      setLoading(true);
-      setNotifications(mockNotifications);
-      setLoading(false);
+      try {
+        setLoading(true);
+        const res = await fetch('/api/notifications');
+        const data = await res.json();
+        if (data.notifications) {
+          setNotifications(data.notifications);
+        }
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadNotifications();
@@ -150,21 +159,44 @@ export default function NotificationsPage() {
     return notifications.filter((item) => item.category === activeFilter);
   }, [notifications, activeFilter]);
 
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((item) => ({ ...item, status: "read" })));
+  const handleMarkAllRead = async () => {
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'read' })
+      });
+      if (res.ok) {
+        setNotifications((prev) => prev.map((item) => ({ ...item, status: 'read' })));
+      }
+    } catch (error) {
+      console.error('Failed to mark all read:', error);
+    }
   };
 
-  const handleToggleRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: item.status === "unread" ? "read" : "unread"
-            }
-          : item
-      )
-    );
+  const handleToggleRead = async (id: string) => {
+    const notification = notifications.find(n => n.id === id);
+    if (!notification) return;
+    const newStatus = notification.status === 'unread' ? 'read' : 'unread';
+
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: newStatus })
+      });
+      if (res.ok) {
+        setNotifications((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? { ...item, status: newStatus }
+              : item
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Failed to toggle read status:', error);
+    }
   };
 
   return (
