@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, AlertTriangle, XCircle, X, Info, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 // --- TOAST SYSTEM ---
 
@@ -16,10 +16,18 @@ interface ToastProps {
 }
 
 export function StatusToast({ message, type, onClose }: ToastProps) {
+    const onCloseRef = useRef(onClose);
     useEffect(() => {
-        const timer = setTimeout(onClose, 4000);
-        return () => clearTimeout(timer);
+        onCloseRef.current = onClose;
     }, [onClose]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            onCloseRef.current();
+        }, 4000);
+        return () => clearTimeout(timer);
+    }, []);
+
 
     const icons = {
         success: <CheckCircle2 className="h-5 w-5 text-emerald-500" />,

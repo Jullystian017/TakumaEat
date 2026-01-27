@@ -47,7 +47,7 @@ export const authOptions: NextAuthOptions = {
           email: existingUser.email,
           name: existingUser.name,
           phone: existingUser.phone ?? undefined,
-          role: (existingUser.role as 'user' | 'admin') ?? 'user'
+          role: (existingUser.role as 'customer' | 'admin') ?? 'customer'
         };
       }
     })
@@ -62,7 +62,7 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name ?? null;
         token.email = user.email;
         token.phone = (user as { phone?: string | null }).phone ?? null;
-        token.role = (user as { role?: 'user' | 'admin' }).role ?? 'user';
+        token.role = (user as { role?: 'customer' | 'admin' }).role ?? 'customer';
       }
 
       return token;
@@ -73,7 +73,7 @@ export const authOptions: NextAuthOptions = {
         session.user.name = (token.name as string | null) ?? undefined;
         session.user.email = token.email as string;
         session.user.phone = (token.phone as string | null) ?? undefined;
-        session.user.role = (token.role as 'user' | 'admin' | undefined) ?? 'user';
+        session.user.role = (token.role as 'customer' | 'admin' | undefined) ?? 'customer';
       }
 
       return session;

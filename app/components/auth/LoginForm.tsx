@@ -33,7 +33,7 @@ export function LoginForm() {
       }
 
       const updatedSession = await getSession();
-      const role = updatedSession?.user?.role === 'admin' ? 'admin' : 'user';
+      const role = updatedSession?.user?.role === 'admin' ? 'admin' : 'customer';
       router.push(role === 'admin' ? '/admin/dashboard' : '/');
       router.refresh();
     } catch (err) {

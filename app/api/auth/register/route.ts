@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       email: normalizedEmail,
       phone: phone ?? null,
       password_hash: passwordHash,
-      role: 'user'
+      role: 'customer'
     });
 
     if (insertError) {

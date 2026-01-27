@@ -35,14 +35,15 @@ type OrderDetailParams = {
 };
 
 const statusLabels: Record<string, string> = {
-  pending_payment: "Menunggu pembayaran",
-  processing: "Sedang diproses",
-  preparing: "Sedang disiapkan",
+  pending_payment: "Menunggu",
+  processing: "Diproses",
+  preparing: "Diproses",
   ready_for_pickup: "Siap diambil",
-  out_for_delivery: "Sedang diantar",
+  out_for_delivery: "Dikirim",
+  on_delivery: "Dikirim",
   completed: "Selesai",
-  cancelled: "Dibatalkan",
-  refunded: "Dana dikembalikan"
+  cancelled: "Batal",
+  refunded: "Batal (Refund)"
 };
 
 const paymentLabels: Record<string, string> = {

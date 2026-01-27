@@ -22,6 +22,8 @@ export async function GET(request: Request) {
             startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         } else if (period === 'year') {
             startDate = new Date(now.getFullYear(), 0, 1);
+        } else if (period === 'all') {
+            startDate = new Date(0); // Beginning of time
         } else {
             startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         }

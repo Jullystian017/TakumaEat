@@ -13,14 +13,15 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const statusLabels: Record<string, string> = {
-  pending_payment: "Menunggu pembayaran",
-  processing: "Sedang diproses",
-  preparing: "Sedang disiapkan",
+  pending_payment: "Menunggu",
+  processing: "Diproses",
+  preparing: "Diproses",
   ready_for_pickup: "Siap diambil",
-  out_for_delivery: "Sedang diantar",
+  out_for_delivery: "Dikirim",
+  on_delivery: "Dikirim",
   completed: "Selesai",
-  cancelled: "Dibatalkan",
-  refunded: "Dana dikembalikan"
+  cancelled: "Batal",
+  refunded: "Batal (Refund)"
 };
 
 const paymentLabels: Record<string, string> = {
@@ -124,6 +125,25 @@ export default function OrdersPage() {
         setError(fetchError instanceof Error ? fetchError.message : "Terjadi kesalahan");
       } finally {
         setLoading(false);
+      }
+    };
+
+    const handleCancelOrder = async (orderId: string) => {
+      if (!confirm('Apakah Anda yakin ingin membatalkan pesanan ini?')) return;
+
+      try {
+        const res = await fetch(`/api/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'cancelled' })
+        });
+
+        if (!res.ok) throw new Error('Gagal membatalkan pesanan');
+
+        // Update local state
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+      } catch (err: any) {
+        alert(err.message);
       }
     };
 
@@ -303,14 +323,26 @@ export default function OrdersPage() {
                             </div>
                           </div>
 
-                          {/* Footer: Action Link */}
-                          <div className="mt-6 border-t border-[#eadfce]/30 pt-6">
+                          {/* Footer: Action Link & Cancel Button */}
+                          <div className="mt-6 border-t border-[#eadfce]/30 pt-6 flex items-center justify-between">
                             <Link
                               href={`/orders/${order.id}`}
                               className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.35em] text-[#b59c7b] transition-all hover:gap-4 hover:text-[#1f1a11]"
                             >
                               Lihat Detail Pesanan <ChevronRight size={14} className="text-brand-gold" />
                             </Link>
+
+                            {order.status === 'pending_payment' && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleCancelOrder(order.id);
+                                }}
+                                className="text-[9px] font-black uppercase tracking-widest text-red-500 hover:text-red-700 transition-colors"
+                              >
+                                Batalkan Pesanan
+                              </button>
+                            )}
                           </div>
                         </motion.article>
                       ))}

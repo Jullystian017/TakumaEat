@@ -53,6 +53,9 @@ export default function MenuPage() {
   const filteredMenu = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
     return menuItems.filter((item) => {
+      // Hide discontinued items
+      if (item.status === 'discontinued') return false;
+
       const categoryName = item.categories?.name || 'Uncategorized';
       const matchesCategory = activeCategory === 'All' || categoryName === activeCategory;
       const matchesSearch = !normalized
@@ -204,8 +207,11 @@ export default function MenuPage() {
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    className="group flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm hover:shadow-xl transition-all duration-500"
-                    onClick={() => setSelectedItem(item)}
+                    className={cn(
+                      "group flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all duration-500",
+                      (item.stock > 0 && item.status === 'available') ? "hover:shadow-xl cursor-pointer" : "cursor-not-allowed opacity-75"
+                    )}
+                    onClick={() => (item.stock > 0 && item.status === 'available') && setSelectedItem(item)}
                   >
                     <div className="relative h-64 overflow-hidden bg-slate-100">
                       <Image
@@ -214,13 +220,8 @@ export default function MenuPage() {
                         fill
                         className={cn(
                           "object-cover transition-transform duration-700 group-hover:scale-110",
-                          item.stock === 0 && "grayscale opacity-50"
+                          (item.stock === 0 || item.status === 'out_of_stock') && "grayscale opacity-50"
                         )}
-                        onLoadingComplete={(img) => {
-                          if (img.naturalWidth === 0) {
-                            // Can set a local error state if needed
-                          }
-                        }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
                       <div className="absolute top-4 left-4">
@@ -228,7 +229,7 @@ export default function MenuPage() {
                           {item.categories?.name || 'Menu'}
                         </span>
                       </div>
-                      {item.stock === 0 && (
+                      {(item.stock === 0 || item.status === 'out_of_stock') && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                           <span className="rounded-lg border-2 border-white px-4 py-2 text-sm font-bold tracking-widest text-white">
                             HABIS
@@ -246,7 +247,7 @@ export default function MenuPage() {
                       <div className="mt-auto flex items-center justify-between pt-4 border-t border-slate-100">
                         <span className="text-lg font-bold text-brand-gold">{formatCurrency(item.price)}</span>
                         <Button
-                          disabled={item.stock === 0}
+                          disabled={item.stock === 0 || item.status === 'out_of_stock'}
                           onClick={(e) => {
                             e.stopPropagation();
                             addItem({
@@ -258,12 +259,12 @@ export default function MenuPage() {
                           }}
                           className={cn(
                             "rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-widest",
-                            item.stock === 0
+                            (item.stock === 0 || item.status === 'out_of_stock')
                               ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                               : "bg-brand-gold text-black shadow-lg hover:shadow-brand-gold/30"
                           )}
                         >
-                          {item.stock === 0 ? 'Hbs' : 'Add'}
+                          {(item.stock === 0 || item.status === 'out_of_stock') ? 'Hbs' : 'Add'}
                         </Button>
                       </div>
                     </div>
@@ -354,7 +355,7 @@ export default function MenuPage() {
                     </div>
 
                     <Button
-                      disabled={selectedItem.stock === 0}
+                      disabled={selectedItem.stock === 0 || selectedItem.status === 'out_of_stock'}
                       onClick={() => {
                         addItem({
                           name: selectedItem.name,
@@ -366,12 +367,12 @@ export default function MenuPage() {
                       }}
                       className={cn(
                         "w-full py-6 rounded-2xl font-bold tracking-widest uppercase text-sm",
-                        selectedItem.stock === 0
+                        (selectedItem.stock === 0 || selectedItem.status === 'out_of_stock')
                           ? "bg-slate-100 text-slate-400"
                           : "bg-brand-gold text-black shadow-xl"
                       )}
                     >
-                      {selectedItem.stock === 0 ? 'Stok Habis' : 'Tambah ke Keranjang'}
+                      {(selectedItem.stock === 0 || selectedItem.status === 'out_of_stock') ? 'Stok Habis' : 'Tambah ke Keranjang'}
                     </Button>
                   </div>
                 </div>

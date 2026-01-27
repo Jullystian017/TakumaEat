@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  BarChart3,
   Bell,
   LayoutDashboard,
   Megaphone,
@@ -16,452 +17,540 @@ import {
   UtensilsCrossed,
   Search,
   Plus,
-  Edit,
   Trash2,
+  Edit,
   X,
+  Clock,
+  LogOut,
+  ChevronLeft,
+  ChevronDown,
+  Menu,
   MapPin,
   Phone,
-  Clock,
-  CheckCircle,
-  XCircle,
-  ExternalLink
+  Clock3,
+  MoreVertical,
+  CheckCircle2,
+  AlertTriangle,
+  Tag
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-
-interface BranchesClientProps {
-  displayName: string;
-  displayNameInitial: string;
-  userEmail: string;
-}
+import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import AdminNotificationDropdown from '@/app/components/AdminNotificationDropdown';
+import { ConfirmationModal, StatusToast, type ToastType } from '@/app/components/AdminActionUI';
 
 interface Branch {
   id: string;
   name: string;
   address: string;
   phone: string;
-  operation_hours: string;
-  map_url?: string;
+  operation_hours?: string;
   is_active: boolean;
-  created_at?: string;
 }
 
-export default function BranchesClient({ displayName, displayNameInitial, userEmail }: BranchesClientProps) {
-  const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+interface BranchesClientProps {
+  displayName: string;
+  displayNameInitial: string;
+  userEmail: string;
+  branches?: Branch[];
+}
 
-  // Form state
-  const [formData, setFormData] = useState<Partial<Branch>>({
-    name: '',
-    address: '',
-    phone: '',
-    operation_hours: '',
-    map_url: '',
-    is_active: true
+export default function BranchesClient({ displayName, displayNameInitial, userEmail, branches: initialBranches = [] }: BranchesClientProps) {
+  const [branches, setBranches] = useState<Branch[]>(initialBranches);
+  const [isLoading, setIsLoading] = useState(initialBranches.length === 0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Sidebar persistence
+  useEffect(() => {
+    const saved = localStorage.getItem('admin_sidebar_collapsed');
+    if (saved !== null) setIsSidebarCollapsed(saved === 'true');
+  }, []);
+
+  const toggleSidebar = () => {
+    const newState = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newState);
+    localStorage.setItem('admin_sidebar_collapsed', String(newState));
+  };
+
+  const [toast, setToast] = useState<{ isOpen: boolean, message: string, type: ToastType }>({
+    isOpen: false,
+    message: '',
+    type: 'success'
   });
 
-  const navItems: { label: string; href: string; icon: LucideIcon }[] = [
-    { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    { label: 'Menu', href: '/admin/menu', icon: UtensilsCrossed },
-    { label: 'Orders', href: '/admin/orders', icon: ShoppingCart },
-    { label: 'Promo', href: '/admin/promo', icon: Megaphone },
-    { label: 'Branches', href: '/admin/branches', icon: Store },
-    { label: 'Users', href: '/admin/users', icon: Users },
-    { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
-    { label: 'Settings', href: '/admin/settings', icon: Settings }
-  ];
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    branchId: string | null;
+    title: string;
+    message: string;
+  }>({
+    isOpen: false,
+    branchId: null,
+    title: '',
+    message: ''
+  });
+
+  const showToast = useCallback((message: string, type: ToastType = 'success') => {
+    setToast({ isOpen: true, message, type });
+  }, []);
 
   const fetchBranches = async () => {
     try {
       setIsLoading(true);
       const res = await fetch('/api/admin/branches');
+      if (!res.ok) throw new Error();
       const data = await res.json();
-      if (data.branches) setBranches(data.branches);
-    } catch (error) {
-      console.error('Failed to fetch branches', error);
+      setBranches(data.branches || []);
+    } catch (e) {
+      showToast('Gagal memuat data cabang', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchBranches();
+    if (initialBranches.length === 0) fetchBranches();
   }, []);
 
-  const filteredBranches = branches.filter((branch) =>
-    branch.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    branch.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Branch Form Modal State
+  const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [branchForm, setBranchForm] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    operation_hours: '',
+    is_active: true
+  });
 
-  const handleOpenModal = (branch?: Branch) => {
-    if (branch) {
-      setEditingBranch(branch);
-      setFormData({
-        name: branch.name,
-        address: branch.address,
-        phone: branch.phone,
-        operation_hours: branch.operation_hours,
-        map_url: branch.map_url || '',
-        is_active: branch.is_active
-      });
-    } else {
-      setEditingBranch(null);
-      setFormData({
-        name: '',
-        address: '',
-        phone: '',
-        operation_hours: '',
-        map_url: '',
-        is_active: true
-      });
-    }
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+  const openAddBranch = () => {
     setEditingBranch(null);
+    setBranchForm({
+      name: '',
+      address: '',
+      phone: '',
+      operation_hours: '',
+      is_active: true
+    });
+    setIsBranchModalOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const openEditBranch = (branch: Branch) => {
+    setEditingBranch(branch);
+    setBranchForm({
+      name: branch.name,
+      address: branch.address,
+      phone: branch.phone,
+      operation_hours: branch.operation_hours || '',
+      is_active: branch.is_active
+    });
+    setIsBranchModalOpen(true);
+  };
+
+  const handleSubmitBranch = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    if (!branchForm.name || !branchForm.address || !branchForm.phone) return;
 
     try {
+      setIsSubmitting(true);
       const url = '/api/admin/branches';
       const method = editingBranch ? 'PUT' : 'POST';
-      const body = editingBranch ? { id: editingBranch.id, ...formData } : formData;
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(editingBranch ? { id: editingBranch.id, ...branchForm } : branchForm)
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to save branch');
-      }
+      if (!res.ok) throw new Error();
 
-      await fetchBranches();
-      handleCloseModal();
-    } catch (error: any) {
-      alert(error?.message || 'Gagal menyimpan data cabang');
-      console.error(error);
+      showToast(editingBranch ? 'Cabang diperbarui' : 'Cabang berhasil ditambahkan');
+      fetchBranches();
+      setIsBranchModalOpen(false);
+    } catch (err) {
+      showToast('Gagal menyimpan cabang', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus cabang ini?')) return;
+  const handleLogout = async () => {
+    await signOut({ redirect: true, callbackUrl: '/login' });
+  };
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    if (profileDropdownOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [profileDropdownOpen]);
+
+  const navItems: { label: string; href: string; icon: LucideIcon }[] = [
+    { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+    { label: 'Menu', href: '/admin/menu', icon: UtensilsCrossed },
+    { label: 'Categories', href: '/admin/categories', icon: Tag },
+    { label: 'Orders', href: '/admin/orders', icon: ShoppingCart },
+    { label: 'Promo', href: '/admin/promo', icon: Megaphone },
+    { label: 'Branches', href: '/admin/branches', icon: Store },
+    { label: 'Users', href: '/admin/users', icon: Users },
+    { label: 'Settings', href: '/admin/settings', icon: Settings }
+  ];
+
+  const handleDeleteBranch = (id: string, name: string) => {
+    setConfirmModal({
+      isOpen: true,
+      branchId: id,
+      title: 'Hapus Cabang',
+      message: `Hapus cabang ${name}? Tindakan ini bersifat permanen.`
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmModal.branchId) return;
     try {
-      const res = await fetch(`/api/admin/branches?id=${id}`, {
-        method: 'DELETE'
-      });
-
-      if (!res.ok) throw new Error('Failed to delete branch');
-
-      setBranches(branches.filter(b => b.id !== id));
-    } catch (error) {
-      alert('Gagal menghapus cabang');
-      console.error(error);
+      const res = await fetch(`/api/admin/branches?id=${confirmModal.branchId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      setBranches(branches.filter(b => b.id !== confirmModal.branchId));
+      showToast('Cabang berhasil dihapus');
+    } catch (e) {
+      showToast('Gagal menghapus cabang', 'error');
+    } finally {
+      setConfirmModal({ ...confirmModal, isOpen: false });
     }
   };
 
-  const handleToggleActive = async (branch: Branch) => {
-    try {
-      const res = await fetch('/api/admin/branches', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: branch.id, is_active: !branch.is_active })
-      });
-
-      if (!res.ok) throw new Error('Failed to update status');
-
-      setBranches(branches.map(b =>
-        b.id === branch.id ? { ...b, is_active: !b.is_active } : b
-      ));
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  const filteredBranches = branches.filter(b =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.address.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="flex min-h-screen bg-white text-slate-900">
-      {/* Sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-64 flex-col border-r border-slate-200 bg-white px-6 py-10 lg:flex">
-        <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12">
-            <Image src="/logotakuma.png" alt="TakumaEat Logo" fill className="object-contain" />
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">TakumaEat</p>
-            <p className="text-lg font-semibold text-slate-900">Admin Hub</p>
+      {/* Sidebar - Shared Pattern */}
+      <aside className={cn(
+        "sticky top-0 hidden h-screen flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out lg:flex",
+        isSidebarCollapsed ? "w-20 px-4" : "w-64 px-6"
+      )}>
+        <div className={cn("flex py-10 items-center justify-between", isSidebarCollapsed && "justify-center")}>
+          <div className="flex items-center gap-3">
+            <div className="relative h-10 w-10 shrink-0">
+              <Image src="/logotakuma.png" alt="Logo" fill className="object-contain" />
+            </div>
+            {!isSidebarCollapsed && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="overflow-hidden whitespace-nowrap">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#EFB036]">Admin Hub</p>
+                <p className="text-sm font-black text-slate-900">TakumaEat</p>
+              </motion.div>
+            )}
           </div>
         </div>
-        <nav className="mt-12 flex-1 space-y-1">
+
+        <nav className="flex-1 space-y-1 overflow-y-auto no-scrollbar">
+          {!isSidebarCollapsed && (
+            <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Main Menu</p>
+          )}
           {navItems.map((item) => {
-            const isActive = item.href === '/admin/branches';
+            const isActiveSidebar = item.href === '/admin/branches';
             return (
               <Link
                 key={item.label}
                 href={item.href}
-                className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${isActive ? 'bg-[#EFB036]/10 text-slate-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
+                className={cn(
+                  "group flex items-center gap-3 rounded-[1.25rem] py-3.5 transition-all duration-200",
+                  isSidebarCollapsed ? "justify-center px-0" : "px-5",
+                  isActiveSidebar ? 'bg-slate-900 text-[#EFB036] shadow-xl' : 'text-slate-500 hover:bg-slate-50'
+                )}
+                title={isSidebarCollapsed ? item.label : undefined}
               >
-                <item.icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? 'text-[#EFB036]' : 'text-[#EFB036] group-hover:text-[#f6c15d]'}`} />
-                <span>{item.label}</span>
+                <item.icon className={cn("h-5 w-5 transition-transform group-hover:scale-110", isActiveSidebar ? 'text-[#EFB036]' : 'text-slate-400 group-hover:text-slate-900')} />
+                {!isSidebarCollapsed && <span className="text-xs font-black uppercase tracking-widest">{item.label}</span>}
               </Link>
             );
           })}
         </nav>
+
+        <div className="mt-auto border-t border-slate-50 pt-6 pb-10">
+          <button onClick={toggleSidebar} className="mt-6 flex h-10 w-full items-center justify-center rounded-xl border border-slate-100 bg-slate-50 text-slate-400 hover:bg-slate-100">
+            <ChevronLeft className={cn("h-4 w-4 transition-transform duration-500", isSidebarCollapsed && "rotate-180")} />
+          </button>
+        </div>
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        {/* Header */}
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-6 py-5 backdrop-blur lg:px-10">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-[#EFB036]">Branches Management</p>
-              <h1 className="mt-2 text-2xl font-semibold md:text-3xl">Kelola Cabang</h1>
-              <p className="mt-2 text-sm text-slate-600">Monitor dan kelola semua cabang TakumaEat.</p>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Header - Shared Pattern */}
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur-md lg:px-10">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4 flex-1">
+              <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 rounded-xl bg-slate-50"><Menu /></button>
+              <div className="relative max-w-md w-full hidden md:block">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari nama atau alamat cabang..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-11 w-full rounded-2xl border border-slate-300 bg-slate-50/50 pl-11 pr-4 text-xs font-bold transition-all focus:border-[#EFB036] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#EFB036]/5"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-3">
-              <button type="button" className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:bg-slate-50">
-                <Bell className="h-5 w-5" />
-              </button>
-              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#EFB036] to-[#d89a28] text-sm font-bold text-white shadow-md">
-                  {displayNameInitial}
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-sm font-semibold text-slate-900">{displayName}</p>
-                  <p className="text-xs text-slate-500">{userEmail}</p>
-                </div>
+              <AdminNotificationDropdown />
+              <div ref={profileDropdownRef} className="relative">
+                <button onClick={() => setProfileDropdownOpen(!profileDropdownOpen)} className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-1.5 pr-4 transition-all hover:border-[#EFB036]/30">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#EFB036] to-[#dfa028] text-sm font-black text-white shadow-lg">{displayNameInitial}</div>
+                  <div className="hidden lg:block text-left">
+                    <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 leading-none mb-1">Administrator</p>
+                    <p className="text-xs font-black text-slate-900">{displayName}</p>
+                  </div>
+                </button>
+                <AnimatePresence>
+                  {profileDropdownOpen && (
+                    <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} className="absolute right-0 mt-3 w-64 origin-top-right overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-2 shadow-2xl z-50">
+                      <div className="px-5 py-5 border-b border-slate-50">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#EFB036] mb-1">Signed in as</p>
+                        <p className="text-xs font-black text-slate-900 truncate">{userEmail}</p>
+                      </div>
+                      <button onClick={handleLogout} className="flex w-full items-center gap-3 px-5 py-4 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50"><LogOut className="h-4 w-4" /><span>Logout System</span></button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto bg-slate-50 px-6 py-10 lg:px-10">
-          {/* Action Bar */}
-          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Cari nama cabang atau alamat..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-sm shadow-sm transition-all placeholder:text-slate-400 focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
-              />
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 px-6 py-10 lg:px-10 no-scrollbar">
+          <div className="mb-10 flex flex-col lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#EFB036]">Logistics</p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 md:text-4xl">Manajemen Cabang</h1>
+              <p className="mt-2 text-sm font-medium text-slate-500">Kelola lokasi dan status operasional outlet TakumaEat.</p>
             </div>
             <button
-              onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 rounded-xl bg-[#EFB036] px-6 py-3 text-sm font-semibold text-black shadow-md transition-all hover:bg-[#dfa028]"
+              onClick={openAddBranch}
+              className="mt-6 flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-[10px] font-black uppercase tracking-widest text-[#EFB036] shadow-xl shadow-black/10 transition-all hover:scale-105 active:scale-95 lg:mt-0"
             >
-              <Plus className="h-5 w-5" />
-              Tambah Cabang
+              <Plus size={16} /> Tambah Cabang Baru
             </button>
           </div>
 
-          {/* Branches Grid */}
-          {isLoading ? (
-            <div className="text-center py-20 text-slate-500">Memuat data cabang...</div>
-          ) : (
-            <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-              {filteredBranches.map((branch) => (
-                <div key={branch.id} className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-lg">
-                  {/* Status Badge */}
-                  <div className="absolute right-4 top-4 z-10">
-                    <button
-                      onClick={() => handleToggleActive(branch)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${branch.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                        }`}
-                    >
-                      {branch.is_active ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                      {branch.is_active ? 'Aktif' : 'Nonaktif'}
-                    </button>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {isLoading ? (
+              <div className="col-span-full py-20 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">Updating network map...</div>
+            ) : filteredBranches.length === 0 ? (
+              <div className="col-span-full py-20 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">No branches found</div>
+            ) : filteredBranches.map((branch) => (
+              <motion.div
+                key={branch.id}
+                layout
+                className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:shadow-2xl hover:-translate-y-1"
+              >
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+
+                <div className="relative p-8 flex-1">
+                  <div className="flex items-start justify-between mb-8">
+                    <div className="h-16 w-16 rounded-2xl bg-[#EFB036]/10 flex items-center justify-center text-[#EFB036] shadow-inner">
+                      <Store size={28} strokeWidth={2.5} />
+                    </div>
+                    <div className={cn(
+                      "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-colors",
+                      branch.is_active
+                        ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                        : "bg-red-50 text-red-600 border border-red-100"
+                    )}>
+                      <div className={cn("h-1.5 w-1.5 rounded-full", branch.is_active ? "bg-emerald-500 animate-pulse" : "bg-red-500")} />
+                      {branch.is_active ? 'Operasional' : 'Tutup'}
+                    </div>
                   </div>
 
-                  <div className="p-6">
-                    {/* Branch Name */}
-                    <div className="mb-4 flex items-start gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EFB036]/10">
-                        <Store className="h-6 w-6 text-[#EFB036]" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-lg font-bold text-slate-900">{branch.name}</h3>
-                        {branch.map_url && (
-                          <a href={branch.map_url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-600 hover:underline">
-                            <ExternalLink className="mr-1 h-3 w-3" />
-                            Lihat Peta
-                          </a>
-                        )}
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900 tracking-tight group-hover:text-[#EFB036] transition-colors line-clamp-1">
+                        {branch.name}
+                      </h3>
+                      <div className="mt-2 flex items-start gap-2.5">
+                        <div className="mt-0.5 h-6 w-6 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 border border-slate-100">
+                          <MapPin size={12} className="text-slate-400" />
+                        </div>
+                        <p className="text-[11px] font-bold text-slate-500 leading-relaxed italic line-clamp-2">
+                          {branch.address}
+                        </p>
                       </div>
                     </div>
 
-                    {/* Details */}
-                    <div className="space-y-3 text-sm">
-                      <div className="flex items-start gap-2 text-slate-600">
-                        <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-[#EFB036]" />
-                        <span>{branch.address}</span>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-6 w-6 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 border border-slate-100">
+                          <Phone size={12} className="text-slate-400" />
+                        </div>
+                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{branch.phone}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-600">
-                        <Phone className="h-4 w-4 flex-shrink-0 text-[#EFB036]" />
-                        <span>{branch.phone || '-'}</span>
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-6 w-6 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 border border-slate-100">
+                          <Clock size={12} className="text-[#EFB036]" />
+                        </div>
+                        <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest line-clamp-1">{branch.operation_hours || '00:00 - 00:00'}</p>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-600">
-                        <Clock className="h-4 w-4 flex-shrink-0 text-[#EFB036]" />
-                        <span>{branch.operation_hours || '-'}</span>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="mt-6 flex gap-2">
-                      <button
-                        onClick={() => handleOpenModal(branch)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-200"
-                      >
-                        <Edit className="h-4 w-4" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(branch.id)}
-                        className="flex items-center justify-center rounded-lg bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition-all hover:bg-red-100"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
 
-          {/* Empty State */}
-          {!isLoading && filteredBranches.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-white py-16">
-              <Store className="h-16 w-16 text-slate-300" />
-              <p className="mt-4 text-lg font-semibold text-slate-900">Tidak ada cabang ditemukan</p>
-              <p className="mt-2 text-sm text-slate-500">Coba ubah kata kunci pencarian atau tambah cabang baru</p>
-            </div>
-          )}
+                <div className="relative mt-8 border-t border-dashed border-slate-200 bg-slate-50/50 p-6 flex items-center justify-start gap-3">
+                  <button
+                    onClick={() => openEditBranch(branch)}
+                    className="flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-[9px] font-black uppercase tracking-widest text-[#EFB036] transition-all hover:scale-105 active:scale-95 shadow-lg shadow-black/5"
+                  >
+                    <Edit size={14} /> Edit Cabang
+                  </button>
+                  <button
+                    onClick={() => handleDeleteBranch(branch.id, branch.name)}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-red-50 bg-white text-red-500 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 active:scale-95 shadow-sm"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+
+                {/* Corner Decorative circles */}
+                <div className="absolute left-0 bottom-[92px] -ml-3 h-6 w-6 rounded-full border border-slate-200 bg-slate-50/50" />
+                <div className="absolute right-0 bottom-[92px] -mr-3 h-6 w-6 rounded-full border border-slate-200 bg-slate-50/50" />
+              </motion.div>
+            ))}
+          </div>
         </main>
       </div>
 
-      {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-6">
-              <h2 className="text-xl font-bold text-slate-900">{editingBranch ? 'Edit Cabang' : 'Tambah Cabang Baru'}</h2>
-              <button onClick={handleCloseModal} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="max-h-[70vh] overflow-y-auto p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Nama Cabang *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Contoh: TakumaEat Jakarta Pusat"
-                    className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Alamat *</label>
-                  <textarea
-                    required
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="Jl. Sudirman No. 123, Tanah Abang"
-                    rows={2}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Telepon</label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="021-12345678"
-                      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Jam Operasional *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.operation_hours}
-                      onChange={(e) => setFormData({ ...formData, operation_hours: e.target.value })}
-                      placeholder="10:00 - 22:00"
-                      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Google Maps URL (Opsional)</label>
-                  <input
-                    type="url"
-                    value={formData.map_url}
-                    onChange={(e) => setFormData({ ...formData, map_url: e.target.value })}
-                    placeholder="https://goo.gl/maps/..."
-                    className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
-                  />
-                </div>
-
+      {/* Mobile Drawer */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMobileMenuOpen(false)} className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm lg:hidden" />
+            <motion.aside initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} className="fixed inset-y-0 left-0 z-[70] w-72 bg-white px-6 py-10 shadow-2xl lg:hidden">
+              <div className="flex items-center justify-between mb-10">
                 <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={formData.is_active}
-                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                    className="h-4 w-4 rounded border-slate-300 text-[#EFB036] focus:ring-2 focus:ring-[#EFB036]/20"
-                  />
-                  <label htmlFor="isActive" className="text-sm font-medium text-slate-700">Cabang Aktif</label>
+                  <Image src="/logotakuma.png" alt="Logo" width={40} height={40} className="object-contain" />
+                  <p className="text-lg font-black text-slate-900">Admin Hub</p>
                 </div>
+                <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-xl bg-slate-50 text-slate-400"><X size={20} /></button>
+              </div>
+              <nav className="space-y-1">
+                {navItems.map((item) => (
+                  <Link key={item.label} href={item.href} onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-4 rounded-2xl px-5 py-4 text-xs font-black uppercase tracking-[0.1em]", item.href === '/admin/branches' ? 'bg-slate-900 text-[#EFB036]' : 'text-slate-500')}>
+                    <item.icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </Link>
+                ))}
+              </nav>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <ConfirmationModal isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message} onConfirm={confirmDelete} onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })} type="danger" />
+      <AnimatePresence>{toast.isOpen && <StatusToast message={toast.message} type={toast.type} onClose={() => setToast({ ...toast, isOpen: false })} />}</AnimatePresence>
+
+      {/* Branch Form Modal */}
+      <AnimatePresence>
+        {isBranchModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-10">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsBranchModalOpen(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-xl max-h-[90vh] overflow-hidden rounded-[3rem] bg-white shadow-2xl flex flex-col"
+            >
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#EFB036]">Network Management</p>
+                  <h2 className="text-2xl font-black text-slate-900 mt-1">{editingBranch ? 'Update Cabang' : 'Tambah Cabang Baru'}</h2>
+                </div>
+                <button onClick={() => setIsBranchModalOpen(false)} className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:bg-slate-100 transition-all"><X size={20} /></button>
               </div>
 
-              <div className="mt-6 flex gap-3">
+              <form onSubmit={handleSubmitBranch} className="flex-1 overflow-y-auto p-8 no-scrollbar bg-slate-50/30">
+                <div className="grid gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Nama Cabang</label>
+                    <input
+                      required
+                      value={branchForm.name}
+                      onChange={e => setBranchForm({ ...branchForm, name: e.target.value })}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-5 text-sm font-bold focus:border-[#EFB036] focus:outline-none focus:ring-4 focus:ring-[#EFB036]/5"
+                      placeholder="Contoh: TakumaEat Purwokerto"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Alamat Lengkap</label>
+                    <textarea
+                      required
+                      value={branchForm.address}
+                      onChange={e => setBranchForm({ ...branchForm, address: e.target.value })}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-bold focus:border-[#EFB036] focus:outline-none focus:ring-4 focus:ring-[#EFB036]/5 min-h-[120px]"
+                      placeholder="Masukkan alamat lengkap cabang..."
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Nomor Telepon</label>
+                    <input
+                      required
+                      type="tel"
+                      value={branchForm.phone}
+                      onChange={e => setBranchForm({ ...branchForm, phone: e.target.value })}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-5 text-sm font-bold focus:border-[#EFB036] focus:outline-none focus:ring-4 focus:ring-[#EFB036]/5"
+                      placeholder="Contoh: 085798051625"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Jam Operasional</label>
+                    <input
+                      required
+                      value={branchForm.operation_hours}
+                      onChange={e => setBranchForm({ ...branchForm, operation_hours: e.target.value })}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-5 text-sm font-bold focus:border-[#EFB036] focus:outline-none focus:ring-4 focus:ring-[#EFB036]/5"
+                      placeholder="Contoh: 08:00 - 22:00"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 p-4 rounded-xl border border-slate-100 bg-white">
+                    <input
+                      type="checkbox"
+                      id="is_active"
+                      checked={branchForm.is_active}
+                      onChange={e => setBranchForm({ ...branchForm, is_active: e.target.checked })}
+                      className="h-5 w-5 rounded border-slate-300 text-[#EFB036] focus:ring-[#EFB036]"
+                    />
+                    <label htmlFor="is_active" className="text-xs font-black uppercase tracking-widest text-slate-700">Status Operasional (Buka)</label>
+                  </div>
+                </div>
+              </form>
+
+              <div className="p-8 border-t border-slate-100 bg-white sticky bottom-0 shrink-0">
                 <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  disabled={isSubmitting}
-                  className="flex-1 rounded-xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                  onClick={handleSubmitBranch}
+                  disabled={isSubmitting || !branchForm.name || !branchForm.address || !branchForm.phone}
+                  className="w-full h-14 rounded-2xl bg-slate-900 text-[#EFB036] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-black/10 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed"
                 >
-                  Batal
+                  {isSubmitting ? 'MEMPROSES...' : (editingBranch ? 'SIMPAN PERUBAHAN' : 'TAMBAHKAN CABANG')}
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 rounded-xl bg-[#EFB036] px-6 py-3 text-sm font-semibold text-black transition-all hover:bg-[#dfa028] disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Menyimpan...' : (editingBranch ? 'Simpan Perubahan' : 'Tambah Cabang')}
-                </button>
+                {(!branchForm.name || !branchForm.address || !branchForm.phone) && (
+                  <p className="text-[9px] font-bold text-red-400 mt-3 text-center uppercase tracking-widest">Lengkapi Nama, Alamat, dan Telepon</p>
+                )}
               </div>
-            </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }
