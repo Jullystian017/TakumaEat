@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ClipboardList, Home, MapPin } from "lucide-react";
+import { ArrowLeft, ClipboardList, Home, MapPin, Tag, Ticket, Percent, ExternalLink, Info, Loader2, Clock, Store, ShoppingCart } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Footer } from "@/app/components/Footer";
 import { Navbar } from "@/app/components/Navbar";
 import { cn } from "@/lib/utils";
 import { useCart } from "@/app/context/CartContext";
+import { AddressSelector } from "@/app/components/checkout/AddressSelector";
 
 declare global {
   interface Window {
@@ -26,13 +27,10 @@ type BranchRecord = {
   name: string;
   address: string;
   operation_hours: string;
+  map_url?: string;
 };
 
 type DeliveryFormState = {
-  fullName: string;
-  phone: string;
-  addressLine: string;
-  detail: string;
   scheduleType: "ASAP" | "SCHEDULED";
   scheduledAt: string;
   notes: string;
@@ -50,10 +48,6 @@ type TakeawayFormState = {
 type Step = "review" | "details" | "confirmation";
 
 const defaultDelivery: DeliveryFormState = {
-  fullName: "",
-  phone: "",
-  addressLine: "",
-  detail: "",
   scheduleType: "ASAP",
   scheduledAt: "",
   notes: ""
@@ -67,27 +61,6 @@ const defaultTakeaway: TakeawayFormState = {
   notes: "",
   paymentMethod: "midtrans"
 };
-
-const staticBranches = [
-  {
-    id: "tokyo",
-    name: "TakumaEat Tokyo",
-    address: "Shibuya Crossing, Tokyo",
-    operation: "10.00 - 22.00"
-  },
-  {
-    id: "jakarta",
-    name: "TakumaEat Jakarta",
-    address: "Jl. Senopati No. 17, Kebayoran Baru",
-    operation: "11.00 - 23.00"
-  },
-  {
-    id: "bandung",
-    name: "TakumaEat Bandung",
-    address: "Jl. Riau No. 22, Bandung",
-    operation: "10.00 - 21.00"
-  }
-];
 
 type CreateOrderResponse = {
   orderId: string;
@@ -109,7 +82,8 @@ function CheckoutPageContent() {
     incrementItem,
     decrementItem,
     removeItem,
-    clearCart
+    clearCart,
+    isLoaded
   } = useCart();
 
   const [step, setStep] = useState<Step>("review");
@@ -119,13 +93,25 @@ function CheckoutPageContent() {
   const [snapReady, setSnapReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Branches
   const [branches, setBranches] = useState<BranchRecord[]>([]);
-  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [branchesLoading, setBranchesLoading] = useState(false);
   const [branchesFallback, setBranchesFallback] = useState(false);
+
   const [showThankYouModal, setShowThankYouModal] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | undefined>(undefined);
+
+  // Promo
+  const [promoCode, setPromoCode] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null);
+  const [isCheckingPromo, setIsCheckingPromo] = useState(false);
+  const [promoMessage, setPromoMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
   const [thankYouVariant, setThankYouVariant] = useState<'success' | 'pending' | 'cod' | 'error'>('success');
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const orderFinalizedRef = useRef(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const storageKey = "takumaeat:checkout-state";
 
@@ -141,10 +127,10 @@ function CheckoutPageContent() {
   }, [sessionStatus, router]);
 
   useEffect(() => {
-    if (!orderFinalizedRef.current && step === "review" && cartItemCount === 0) {
+    if (isLoaded && !orderFinalizedRef.current && step === "review" && cartItemCount === 0) {
       router.replace("/menu");
     }
-  }, [cartItemCount, router, step]);
+  }, [cartItemCount, router, step, isLoaded]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -185,10 +171,14 @@ function CheckoutPageContent() {
         const raw = localStorage.getItem(storageKey);
         if (!raw) return;
         const parsed = JSON.parse(raw) as {
+          step?: Step;
           orderType?: OrderType;
           delivery?: DeliveryFormState;
           takeaway?: TakeawayFormState;
         };
+        if (parsed.step) {
+          setStep(parsed.step);
+        }
         if (!modeParam && parsed.orderType) {
           setOrderType(parsed.orderType);
         }
@@ -200,15 +190,19 @@ function CheckoutPageContent() {
         }
       } catch (error) {
         console.warn("Failed to load checkout state", error);
+      } finally {
+        setIsHydrated(true);
       }
     };
     loadInitialState();
   }, [modeParam]);
 
   useEffect(() => {
+    if (!isHydrated) return;
     const persistState = () => {
       if (typeof window === "undefined") return;
       const payload = {
+        step,
         orderType,
         delivery: deliveryForm,
         takeaway: takeawayForm
@@ -216,7 +210,7 @@ function CheckoutPageContent() {
       localStorage.setItem(storageKey, JSON.stringify(payload));
     };
     persistState();
-  }, [orderType, deliveryForm, takeawayForm]);
+  }, [step, orderType, deliveryForm, takeawayForm, isHydrated]);
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -241,14 +235,16 @@ function CheckoutPageContent() {
     }
   }, [orderType]);
 
-  const validateDeliveryForm = () => {
-    if (!deliveryForm.fullName.trim() || !deliveryForm.phone.trim() || !deliveryForm.addressLine.trim()) {
-      setErrorMessage("Lengkapi nama, nomor telepon, dan alamat pengantaran.");
-      return false;
-    }
+  // Reset promo on cart change or switch mode
+  useEffect(() => {
+    setAppliedPromo(null);
+    setPromoCode("");
+    setPromoMessage(null);
+  }, [cartSubtotal]); // If total changes, we should re-validate if we want strictness, or just reset. Resetting is safer.
 
-    if (!/^(\+62|62|0)8[1-9][0-9]{6,11}$/.test(deliveryForm.phone.trim())) {
-      setErrorMessage("Format nomor telepon tidak valid. Gunakan nomor ponsel Indonesia.");
+  const validateDeliveryForm = () => {
+    if (!selectedAddressId) {
+      setErrorMessage("Pilih atau tambah alamat pengantaran.");
       return false;
     }
 
@@ -290,17 +286,46 @@ function CheckoutPageContent() {
     return true;
   };
 
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setIsCheckingPromo(true);
+    setPromoMessage(null);
+    setAppliedPromo(null);
+
+    try {
+      const res = await fetch('/api/promos/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode, cartTotal: cartSubtotal })
+      });
+      const data = await res.json();
+
+      if (data.valid) {
+        setAppliedPromo({ code: data.promoCode, discount: data.discountAmount });
+        setPromoMessage({ text: data.message, type: 'success' });
+      } else {
+        setPromoMessage({ text: data.message, type: 'error' });
+      }
+    } catch (error) {
+      setPromoMessage({ text: 'Gagal mengecek promo', type: 'error' });
+    } finally {
+      setIsCheckingPromo(false);
+    }
+  };
+
   const overview = useMemo(() => {
     const deliveryFee = orderType === "delivery" ? 15000 : 0;
     const codFee = orderType === "takeaway" && takeawayForm.paymentMethod === "cod" ? 0 : 0;
-    const total = cartSubtotal + deliveryFee + codFee;
+    const discount = appliedPromo ? appliedPromo.discount : 0;
+    const total = Math.max(0, cartSubtotal - discount + deliveryFee + codFee);
 
     return {
       deliveryFee,
       codFee,
+      discount,
       total
     };
-  }, [orderType, cartSubtotal, takeawayForm.paymentMethod]);
+  }, [orderType, cartSubtotal, takeawayForm.paymentMethod, appliedPromo]);
 
   const proceedToDetails = () => {
     if (step !== "review") return;
@@ -406,17 +431,19 @@ function CheckoutPageContent() {
       orderType,
       paymentMethod,
       cartItems: cartPayload,
+      promoCode: appliedPromo?.code,
       delivery:
         orderType === "delivery"
           ? {
-              ...deliveryForm
-            }
+            ...deliveryForm,
+            addressId: selectedAddressId
+          }
           : undefined,
       takeaway:
         orderType === "takeaway"
           ? {
-              ...takeawayForm
-            }
+            ...takeawayForm
+          }
           : undefined
     };
 
@@ -566,7 +593,7 @@ function CheckoutPageContent() {
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-[#1f1a11]">{item.name}</p>
-                  <p className="text-xs text-[#847766]">{item.note || "Tanpa catatan"}</p>
+                  <p className="text-xs text--[#847766]">{item.note || "Tanpa catatan"}</p>
                 </div>
                 <div className="text-right text-sm font-semibold text-[#1f1a11]">
                   <p>{currency.format(item.price)}</p>
@@ -611,56 +638,27 @@ function CheckoutPageContent() {
 
   const renderDeliveryForm = () => (
     <section className="rounded-3xl border border-[#eadfce] bg-white p-6 shadow-[0_28px_60px_rgba(183,150,111,0.18)]">
-      <header className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#b59c7b]">Detail Pengantaran</p>
-        <h2 className="text-lg font-semibold text-[#1f1a11]">Masukkan alamat dan jadwal pengantaran</h2>
-      </header>
-      <div className="mt-6 space-y-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Nama penerima</span>
-            <input
-              type="text"
-              className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-4 py-3 text-sm text-[#1f1a11] focus:border-brand-gold focus:outline-none"
-              value={deliveryForm.fullName}
-              onChange={(event) => setDeliveryForm((prev) => ({ ...prev, fullName: event.target.value }))}
-              placeholder="Nama lengkap penerima"
-            />
-          </label>
-          <label className="flex flex-col gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Nomor telepon</span>
-            <input
-              type="tel"
-              className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-4 py-3 text-sm text-[#1f1a11] focus:border-brand-gold focus:outline-none"
-              value={deliveryForm.phone}
-              onChange={(event) => setDeliveryForm((prev) => ({ ...prev, phone: event.target.value }))}
-              placeholder="08XXXXXXXXXX"
-            />
-          </label>
+      <header className="space-y-1 mb-8">
+        <div className="flex items-center gap-2 text-[#b59c7b]">
+          <p className="text-xs font-semibold uppercase tracking-[0.32em]">Detail Pengantaran</p>
         </div>
-        <label className="flex flex-col gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Alamat lengkap</span>
-          <textarea
-            className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-4 py-3 text-sm text-[#1f1a11] focus:border-brand-gold focus:outline-none"
-            rows={3}
-            value={deliveryForm.addressLine}
-            onChange={(event) => setDeliveryForm((prev) => ({ ...prev, addressLine: event.target.value }))}
-            placeholder="Masukkan alamat tujuan pengantaran"
-          />
-        </label>
-        <label className="flex flex-col gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Detail lokasi (opsional)</span>
-          <input
-            type="text"
-            className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-4 py-3 text-sm text-[#1f1a11] focus:border-brand-gold focus:outline-none"
-            value={deliveryForm.detail}
-            onChange={(event) => setDeliveryForm((prev) => ({ ...prev, detail: event.target.value }))}
-            placeholder="Blok / patokan / instruksi khusus"
-          />
-        </label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Jadwal pengantaran</span>
+        <h2 className="text-lg font-semibold text-[#1f1a11]">Pilih alamat dan jadwal pengantaran</h2>
+      </header>
+
+      <div className="mb-10">
+        <AddressSelector
+          selectedAddressId={selectedAddressId}
+          onSelect={(address) => setSelectedAddressId(address.id)}
+        />
+      </div>
+
+      <div className="space-y-8">
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div className="flex flex-col gap-3">
+            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.3em] text-[#9a8871]">
+              <Clock size={12} className="text-[#8d5814]" />
+              Jadwal pengantaran
+            </span>
             <div className="flex gap-3">
               {[
                 { key: "ASAP", label: "Antar segera" },
@@ -671,7 +669,7 @@ function CheckoutPageContent() {
                   type="button"
                   onClick={() => setDeliveryForm((prev) => ({ ...prev, scheduleType: option.key as DeliveryFormState["scheduleType"] }))}
                   className={cn(
-                    "flex-1 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition-all",
+                    "flex-1 h-11 rounded-full border px-4 text-[10px] font-extrabold uppercase tracking-[0.22em] transition-all",
                     deliveryForm.scheduleType === option.key
                       ? "border-brand-gold bg-[#fae8c8] text-[#8d5814]"
                       : "border-[#eadfce] bg-[#fdf6ec] text-[#7b5d2f]"
@@ -683,33 +681,30 @@ function CheckoutPageContent() {
             </div>
           </div>
           {deliveryForm.scheduleType === "SCHEDULED" && (
-            <label className="flex flex-col gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Pilih waktu</span>
+            <label className="flex flex-col gap-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9a8871]">Pilih waktu</span>
               <input
                 type="datetime-local"
-                className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-4 py-3 text-sm text-[#1f1a11] focus:border-brand-gold focus:outline-none"
+                className="h-11 rounded-full border border-[#eadfce] bg-[#fdf6ec] px-5 text-xs text-[#1f1a11] focus:border-brand-gold focus:outline-none"
                 value={deliveryForm.scheduledAt}
                 onChange={(event) => setDeliveryForm((prev) => ({ ...prev, scheduledAt: event.target.value }))}
               />
             </label>
           )}
         </div>
-        <label className="flex flex-col gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Catatan untuk kurir</span>
+        <label className="flex flex-col gap-3">
+          <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.3em] text-[#9a8871]">
+            <ClipboardList size={12} className="text-[#8d5814]" />
+            Catatan untuk kurir
+          </span>
           <textarea
-            className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-4 py-3 text-sm text-[#1f1a11] focus:border-brand-gold focus:outline-none"
+            className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-4 py-3 text-sm text-[#1f1a11] focus:border-brand-gold focus:outline-none resize-none"
             rows={2}
             value={deliveryForm.notes}
             onChange={(event) => setDeliveryForm((prev) => ({ ...prev, notes: event.target.value }))}
             placeholder="Contoh: Tolong hubungi saat sampai di lobby"
           />
         </label>
-        <div className="rounded-2xl border border-brand-gold/40 bg-[#fff0d8] p-4 text-xs text-[#8d5814]">
-          <p className="font-semibold uppercase tracking-[0.26em]">Peta lokasi</p>
-          <p className="mt-2 text-[11px] text-[#b9893f]">
-            Komponen peta interaktif akan ditempatkan di sini (mis. Mapbox / Google Maps). User dapat drop pin dan koordinat akan tersimpan di order.
-          </p>
-        </div>
       </div>
     </section>
   );
@@ -717,13 +712,18 @@ function CheckoutPageContent() {
   const renderTakeawayForm = () => (
     <section className="rounded-3xl border border-[#eadfce] bg-white p-6 shadow-[0_28px_60px_rgba(183,150,111,0.18)]">
       <header className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#b59c7b]">Detail Pengambilan</p>
+        <div className="flex items-center gap-2 text-[#b59c7b]">
+          <p className="text-xs font-semibold uppercase tracking-[0.32em]">Detail Pengambilan</p>
+        </div>
         <h2 className="text-lg font-semibold text-[#1f1a11]">Pilih cabang dan waktu pengambilan</h2>
       </header>
       <div className="mt-6 space-y-5">
         <label className="flex flex-col gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Cabang</span>
-          <div className="space-y-6">
+          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">
+            <Home size={14} className="text-[#8d5814]" />
+            Cabang
+          </span>
+          <div className="space-y-3">
             {branchesLoading && (
               <div className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] p-4 text-sm text-[#7b5d2f]">
                 Memuat daftar cabang...
@@ -734,37 +734,46 @@ function CheckoutPageContent() {
                 Cabang belum tersedia. {branchesFallback ? "Gunakan data default atau hubungi admin." : "Silakan coba lagi nanti."}
               </div>
             )}
-            {branches.map((branch) => {
-              const isSelected = takeawayForm.branchId === branch.id;
-              return (
-                <button
-                  key={branch.id}
-                  type="button"
-                  onClick={() => setTakeawayForm((prev) => ({
-                    ...prev,
-                    branchId: branch.id,
-                    branchName: branch.name
-                  }))}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-2xl border px-4 py-4 text-left transition-all",
-                    isSelected
-                      ? "border-brand-gold bg-[#fae8c8] text-[#8d5814]"
-                      : "border-[#eadfce] bg-[#fff9f1] text-[#7b5d2f]"
-                  )}
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-[#1f1a11]">{branch.name}</p>
-                    <p className="text-[11px] text-[#847766]">{branch.address}</p>
-                  </div>
-                  <p className="text-[10px] uppercase tracking-[0.26em] text-[#b59c7b]">{branch.operation_hours}</p>
-                </button>
-              );
-            })}
+            <div className="grid gap-3 sm:grid-cols-2">
+              {branches.map((branch) => {
+                const isSelected = takeawayForm.branchId === branch.id;
+                return (
+                  <button
+                    key={branch.id}
+                    type="button"
+                    onClick={() => setTakeawayForm((prev) => ({
+                      ...prev,
+                      branchId: branch.id,
+                      branchName: branch.name
+                    }))}
+                    className={cn(
+                      "group flex flex-col items-start gap-2 rounded-2xl border px-4 py-4 text-left transition-all hover:bg-[#fae8c8]",
+                      isSelected
+                        ? "border-brand-gold bg-[#fae8c8] text-[#8d5814] ring-1 ring-brand-gold"
+                        : "border-[#eadfce] bg-[#fff9f1] text-[#7b5d2f]"
+                    )}
+                  >
+                    <div className="flex w-full items-start justify-between">
+                      <p className="text-sm font-semibold text-[#1f1a11]">{branch.name}</p>
+                      {isSelected && <div className="h-2 w-2 rounded-full bg-brand-gold" />}
+                    </div>
+                    <p className="text-[11px] text-[#847766] line-clamp-2">{branch.address}</p>
+                    <div className="mt-2 flex items-center justify-between w-full text-[10px] text-[#b59c7b]">
+                      <span className="uppercase tracking-wider">{branch.operation_hours}</span>
+                      {branch.map_url && <a href={branch.map_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="hover:underline flex items-center gap-1"><ExternalLink size={10} /> Peta</a>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Waktu ambil</span>
+            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">
+              <Clock size={14} className="text-[#8d5814]" />
+              Waktu ambil
+            </span>
             <div className="flex gap-3">
               {[
                 { key: "NOW", label: "Segera" },
@@ -799,7 +808,10 @@ function CheckoutPageContent() {
           )}
         </div>
         <label className="flex flex-col gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Catatan</span>
+          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">
+            <ClipboardList size={14} className="text-[#8d5814]" />
+            Catatan
+          </span>
           <textarea
             className="rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-4 py-3 text-sm text-[#1f1a11] focus:border-brand-gold focus:outline-none"
             rows={2}
@@ -842,205 +854,248 @@ function CheckoutPageContent() {
         <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#b59c7b]">Ringkasan pembayaran</p>
         <h2 className="text-lg font-semibold text-[#1f1a11]">Total tagihan</h2>
       </header>
+
+      {/* Promo Code Input */}
+      <div className="space-y-2">
+        <label className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9a8871]">Kode Promo</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Masukkan kode..."
+            className="flex-1 rounded-xl border border-[#eadfce] bg-[#fff9f1] px-4 py-2 text-sm uppercase focus:outline-none focus:border-brand-gold"
+            value={promoCode}
+            onChange={e => setPromoCode(e.target.value.toUpperCase())}
+            disabled={!!appliedPromo}
+          />
+          {appliedPromo ? (
+            <Button
+              variant="outline"
+              onClick={() => { setAppliedPromo(null); setPromoCode(''); setPromoMessage(null); }}
+              className="rounded-xl border-brand-gold text-[#8d5814] hover:bg-[#fae8c8]"
+            >
+              Hapus
+            </Button>
+          ) : (
+            <Button
+              onClick={handleApplyPromo}
+              disabled={!promoCode || isCheckingPromo}
+              className="rounded-xl bg-brand-gold text-black hover:bg-[#dfa028]"
+            >
+              {isCheckingPromo ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Gunakan'}
+            </Button>
+          )}
+        </div>
+        {promoMessage && (
+          <div className={cn("text-xs flex items-center gap-1", promoMessage.type === 'success' ? 'text-green-600' : 'text-red-600')}>
+            {promoMessage.type === 'success' ? <Ticket size={12} /> : <Info size={12} />}
+            {promoMessage.text}
+          </div>
+        )}
+      </div>
+
+      <div className="h-px bg-[#eadfce]" />
+
       <dl className="space-y-3 text-sm text-[#5c5244]">
         <div className="flex items-center justify-between">
           <dt>Subtotal</dt>
-          <dd className="font-semibold text-[#1f1a11]">{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(cartSubtotal)}</dd>
+          <dd className="font-semibold text-[#1f1a11]">{currency.format(cartSubtotal)}</dd>
         </div>
+
+        {/* Discount Line */}
+        {overview.discount > 0 && (
+          <div className="flex items-center justify-between text-red-600">
+            <dt className="flex items-center gap-1"><Ticket size={14} /> Diskon ({appliedPromo?.code})</dt>
+            <dd className="font-semibold">- {currency.format(overview.discount)}</dd>
+          </div>
+        )}
+
         {overview.deliveryFee > 0 && (
           <div className="flex items-center justify-between">
             <dt>Biaya pengantaran</dt>
-            <dd className="font-semibold text-[#1f1a11]">{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(overview.deliveryFee)}</dd>
+            <dd className="font-semibold text-[#1f1a11]">{currency.format(overview.deliveryFee)}</dd>
           </div>
         )}
         {overview.codFee > 0 && (
           <div className="flex items-center justify-between">
-            <dt>Biaya COD</dt>
-            <dd className="font-semibold text-[#1f1a11]">{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(overview.codFee)}</dd>
+            <dt>Biaya layanan COD</dt>
+            <dd className="font-semibold text-[#1f1a11]">{currency.format(overview.codFee)}</dd>
           </div>
         )}
+        <div className="flex items-center justify-between border-t border-[#eadfce] pt-3 text-base">
+          <dt className="font-bold text-[#1f1a11]">Total Bayar</dt>
+          <dd className="text-xl font-bold text-[#EFB036]">{currency.format(overview.total)}</dd>
+        </div>
       </dl>
-      <div className="rounded-2xl border border-brand-gold/40 bg-[#fff0d8] p-4">
-        <div className="flex items-center justify-between text-sm font-semibold text-[#8d5814]">
-          <span>Total dibayar</span>
-          <span>{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(overview.total)}</span>
-        </div>
-      </div>
-      <div className="space-y-3">
-        {step === "details" && (
-          <Button
-            variant="ghost"
-            onClick={backToReview}
-            className="w-full rounded-full border border-[#eadfce] bg-[#fdf6ec] py-3 text-xs font-semibold uppercase tracking-[0.24em] text-[#7b5d2f] hover:bg-[#f7ebdb]"
-          >
-            Kembali
-          </Button>
+      <Button
+        size="lg"
+        className="mt-2 w-full rounded-2xl bg-[#EFB036] text-black shadow-[0_20px_40px_rgba(239,176,54,0.3)] hover:bg-[#d89a28]"
+        onClick={step === "review" ? proceedToDetails : handlePlaceOrder}
+        disabled={isSubmitting || cartItemCount === 0 || (step === "details" && orderType === "delivery" && !selectedAddressId) || (step === "details" && orderType === "takeaway" && !takeawayForm.branchId)}
+      >
+        {isSubmitting ? (
+          <div className="flex items-center gap-2">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
+            <span>Memproses...</span>
+          </div>
+        ) : step === "review" ? (
+          "Lanjut ke Pembayaran"
+        ) : (
+          "Buat Pesanan Sekarang"
         )}
-        {step === "review" && (
-          <Button
-            onClick={proceedToDetails}
-            className="w-full rounded-full bg-brand-gold py-3 text-xs font-semibold uppercase tracking_[0.24em] text-black shadow_[0_24px_56px_rgba(239,176,54,0.42)] hover:shadow_[0_30px_70px_rgba(239,176,54,0.55)]"
-          >
-            Lanjutkan ke detail
-          </Button>
-        )}
-        {step === "details" && (
-          <Button
-            onClick={handlePlaceOrder}
-            disabled={
-              (orderType === "delivery" && !snapReady) ||
-              (orderType === "takeaway" && takeawayForm.paymentMethod === "midtrans" && !snapReady) ||
-              isSubmitting
-            }
-            className="w-full rounded-full bg-brand-gold py-3 text-xs font-semibold uppercase tracking_[0.24em] text-black shadow_[0_24px_56px_rgba(239,176,54,0.32)] hover:shadow_[0_30px_70px_rgba(239,176,54,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "Memproses..." : "Place Order"}
-          </Button>
-        )}
-        {step === "confirmation" && (
-          <Button
-            disabled
-            className="w-full rounded-full bg-brand-gold py-3 text-xs font-semibold uppercase tracking_[0.24em] text-black opacity-70"
-          >
-            Memproses pesanan...
-          </Button>
-        )}
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="flex items-center gap-2 rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-3 py-2 text-[12px] text-[#7b6a57]">
-          <Home className="h-4 w-4 text-[#a0792c]" />
-          <span>Operasional 10.00 - 22.00 WIB</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-3 py-2 text-[12px] text-[#7b6a57]">
-          <MapPin className="h-4 w-4 text-[#a0792c]" />
-          <span>Jangkauan delivery 15KM</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-2xl border border-[#eadfce] bg-[#fff9f1] px-3 py-2 text-[12px] text-[#7b6a57] sm:col-span-2">
-          <ClipboardList className="h-4 w-4 text-[#a0792c]" />
-          <span>Invoice & status pesanan siap dipantau di halaman ini.</span>
-        </div>
+      </Button>
+      <div className="flex items-center justify-center gap-2 text-[10px] text-[#9a8871]">
+        <span className="h-3 w-3 rounded-full bg-green-500/20 text-green-700 flex items-center justify-center">✓</span>
+        Dijamin aman & terpercaya
       </div>
     </aside>
   );
 
-  return (
-    <>
-      <Navbar />
-      <main className="min-h-screen bg-white pb-20 pt-24 text-[#1f1a11]">
-        <section className="mx-auto w-full max-w-6xl px-6">
-          <header className="flex flex-col gap-6 border-b border-[#d0bfa6]/40 pb-6">
-          <div className="flex items-center gap-4">
+  // Auto-escape from stuck confirmation state
+  useEffect(() => {
+    if (step === "confirmation" && !isSubmitting) {
+      const timeout = setTimeout(() => {
+        console.warn('[checkout] Stuck in confirmation, resetting to review');
+        setStep("review");
+      }, 5000); // 5 seconds timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [step, isSubmitting]);
+
+  if (step === "confirmation") {
+    // Keep modal open, render placeholder background or keep last state
+    return (
+      <div className="flex min-h-screen flex-col bg-white">
+        <Navbar />
+        <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-6">
+          <div className="text-center">
+            <div className="mx-auto mb-6 h-16 w-16 animate-spin rounded-full border-4 border-[#eadfce] border-t-brand-gold"></div>
+            <h1 className="text-2xl font-bold text-[#1f1a11]">Memproses pesanan...</h1>
+            <p className="mt-2 text-[#847766]">Mohon jangan tutup halaman ini.</p>
             <Button
+              onClick={() => {
+                setStep("review");
+                setIsSubmitting(false);
+              }}
               variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-full border border-[#d0bfa6]/60 text-[#1f1a11] hover:bg-[#f4e7d6]"
-              onClick={() => router.back()}
+              className="mt-8 text-sm text-[#9a8871] hover:text-[#8d5814]"
             >
-              <ArrowLeft className="h-5 w-5" />
+              Kembali ke Keranjang
             </Button>
-            <div className="space-y-2">
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#f4e7d6] px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#8d5814]">
-                Checkout
-              </span>
-              <h1 className="text-3xl font-semibold tracking-tight text-[#1f1a11] sm:text-4xl">Selesaikan pesanan TakumaEat-mu</h1>
-              <p className="text-sm text-[#5c5244]">
-                Pilih metode pengantaran atau takeaway, lalu lanjutkan ke pembayaran. Kami akan memproses pesananmu dengan standar premium.
-              </p>
-            </div>
-          </div>
-          {renderStepper()}
-        </header>
-
-        {errorMessage && (
-          <div className="mt-6 rounded-3xl border border-red-300/60 bg-red-100 p-5 text-sm text-red-700">
-            {errorMessage}
-          </div>
-        )}
-
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1.4fr,1fr] lg:items-start">
-          <div className="space-y-8">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-[#eadfce] bg-white px-6 py-4 shadow-[0_18px_40px_rgba(183,150,111,0.16)]">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#b59c7b]">Metode pemenuhan</p>
-                <p className="text-base font-semibold text-[#1f1a11]">
-                  {orderType === "delivery" ? "Delivery" : "Takeaway"}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                className="rounded-full border border-[#eadfce] bg-[#fdf6ec] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#7b5d2f] hover:bg-[#f7ebdb]"
-                onClick={() => router.push("/checkout/start")}
-              >
-                Ubah pilihan
-              </Button>
-            </div>
-
-            {step === "review" && renderCartReview()}
-
-            {step !== "review" && (
-              <div className="space-y-8">
-                {orderType === "delivery" ? renderDeliveryForm() : renderTakeawayForm()}
-              </div>
-            )}
-          </div>
-
-          {renderSummary()}
-        </div>
-        </section>
-    </main>
-
-    {showThankYouModal && createdOrderId && (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
-        <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
-        <div className="relative z-10 w-full max-w-xl overflow-hidden rounded-[32px] border border-white/20 bg-white/95 p-0 shadow-[0_40px_120px_rgba(15,23,42,0.28)] backdrop-blur">
-          <div className="relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#fce3c7] via-[#fef3d4] to-[#f8dfc8] opacity-90" />
-            <div className="relative flex flex-col items-center gap-4 px-10 pb-10 pt-12 text-center text-[#1f1a11]">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-[0_20px_40px_rgba(183,150,111,0.35)]">
-                <svg viewBox="0 0 64 64" className="h-8 w-8 text-[#c7812e]" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 32.5l10 9.5 22-20" />
-                </svg>
-              </div>
-              <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#9c7440]">Terima kasih</p>
-                <h2 className="text-3xl font-semibold leading-tight text-[#1f1a11]">{modalContent.title}</h2>
-                <p className="text-sm text-[#5c5244]">{modalContent.description}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4 border-t border-white/40 bg-white/96 px-8 py-6 text-left">
-            <div className="flex items-center gap-3 rounded-2xl border border-[#eadfce] bg-[#fff7eb] px-4 py-3 text-sm text-[#7b5d2f]">
-              <ClipboardList className="h-4 w-4 text-[#b8792c]" />
-              <span>Pesanan #{createdOrderId.slice(0, 8).toUpperCase()} sudah tercatat. Pantau statusnya dari halaman pesanan.</span>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button
-                variant="outline"
-                className="flex-1 rounded-full border border-[#eadfce] bg-white px-5 py-3 text-sm font-semibold text-[#7b5d2f] hover:bg-[#f4e7d6] sm:flex-none sm:px-6"
-                onClick={handleCloseModal}
-              >
-                Ke Beranda
-              </Button>
-              <Button
-                className="flex-1 rounded-full bg-[#c7812e] px-6 py-3 text-sm font-semibold text-white shadow-[0_22px_45px_rgba(199,129,46,0.42)] transition-transform hover:-translate-y-0.5 hover:bg-[#d8913f] sm:flex-none"
-                onClick={handleViewOrder}
-              >
-                Lihat detail pesanan
-              </Button>
-            </div>
           </div>
         </div>
       </div>
-    )}
-    <Footer />
-  </>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-white">
+      <Navbar />
+      <main className="flex-1 px-4 pt-28 pb-12 md:px-8 lg:px-12 xl:px-20">
+        <div className="mx-auto max-w-7xl">
+          <header className="mb-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div>
+              <button
+                onClick={step === "details" ? backToReview : () => router.push("/menu")}
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[#9a8871] transition-colors hover:text-[#8d5814]"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                {step === "details" ? "Kembali ke review" : "Kembali ke menu"}
+              </button>
+              <h1 className="mt-4 text-3xl font-bold text-[#1f1a11] md:text-4xl">Konfirmasi Pesanan</h1>
+            </div>
+            {renderStepper()}
+          </header>
+
+          <div className="grid gap-10 lg:grid-cols-12">
+            <div className="space-y-8 lg:col-span-8">
+              {/* Toggle Order Type */}
+              <div className="grid grid-cols-2 gap-2 rounded-full border border-[#eadfce] bg-white p-2">
+                {[
+                  { id: "delivery", icon: MapPin, label: "Delivery" },
+                  { id: "takeaway", icon: ClipboardList, label: "Takeaway" }
+                ].map((type) => {
+                  const isActive = orderType === type.id;
+                  return (
+                    <button
+                      key={type.id}
+                      onClick={() => {
+                        setOrderType(type.id as OrderType);
+                        const params = new URLSearchParams(searchParams?.toString());
+                        params.set("mode", type.id);
+                        router.replace(`/checkout?${params.toString()}`, { scroll: false });
+                      }}
+                      className={cn(
+                        "flex items-center justify-center gap-3 rounded-full py-3 transition-all",
+                        isActive
+                          ? "bg-[#1f1a11] text-brand-gold shadow-lg"
+                          : "text-[#847766] hover:bg-[#fdf6ec]"
+                      )}
+                    >
+                      <type.icon className={cn("h-5 w-5", isActive ? "text-brand-gold" : "text-[#b59c7b]")} />
+                      <span className="text-xs font-bold uppercase tracking-[0.24em]">{type.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {errorMessage && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800">
+                  {errorMessage}
+                </div>
+              )}
+
+              {step === "review" && renderCartReview()}
+              {step === "details" && orderType === "delivery" && renderDeliveryForm()}
+              {step === "details" && orderType === "takeaway" && renderTakeawayForm()}
+            </div>
+
+            <div className="lg:col-span-4">{renderSummary()}</div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+
+      {/* Thank You Modal */}
+      {showThankYouModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm transition-all">
+          <div className="relative w-full max-w-md scale-100 overflow-hidden rounded-3xl bg-white p-8 opacity-100 shadow-2xl transition-all">
+            <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ${thankYouVariant === 'error' ? 'bg-red-100' : 'bg-[#fff4e0]'}`}>
+              {thankYouVariant === 'success' && <div className="h-10 w-10 text-brand-gold text-4xl text-center">✓</div>}
+              {thankYouVariant === 'error' && <div className="h-10 w-10 text-red-600 text-4xl text-center">!</div>}
+              {(thankYouVariant === 'pending' || thankYouVariant === 'cod') && <div className="h-10 w-10 text-brand-gold text-4xl text-center">!</div>}
+            </div>
+
+            <h2 className="text-center text-2xl font-bold text-[#1f1a11]">{modalContent.title}</h2>
+            <p className="mt-3 text-center text-sm leading-relaxed text-[#847766]">
+              {modalContent.description}
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3">
+              <Button
+                onClick={handleViewOrder}
+                className="w-full rounded-xl bg-[#1f1a11] py-6 text-xs font-bold uppercase tracking-[0.2em] text-[#EFB036] hover:bg-black"
+              >
+                Lihat Detail Pesanan
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleCloseModal}
+                className="w-full rounded-xl py-6 text-xs font-bold uppercase tracking-[0.2em] text-[#847766] hover:bg-[#fdf6ec] hover:text-[#5c5244]"
+              >
+                Kembali ke Beranda
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-white" />}>
+    <Suspense>
       <CheckoutPageContent />
     </Suspense>
   );

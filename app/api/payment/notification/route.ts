@@ -102,15 +102,53 @@ export async function POST(request: Request) {
 
     const nextStatuses = resolveStatuses(body.transaction_status, body.fraud_status);
 
-    const shouldUpdate =
+    // Extract specific payment channel info
+    let paymentChannel = 'Midtrans';
+    const payload = body as any;
+
+    if (payload.payment_type === 'credit_card') {
+      paymentChannel = `Credit Card (${payload.bank?.toUpperCase() || 'Card'})`;
+    } else if (payload.payment_type === 'bank_transfer') {
+      const bank = payload.va_numbers?.[0]?.bank?.toUpperCase() || payload.bank?.toUpperCase() || 'Bank Transfer';
+      paymentChannel = bank;
+    } else if (payload.payment_type === 'cstore') {
+      paymentChannel = payload.store?.toUpperCase() || 'Convenience Store';
+    } else if (payload.payment_type === 'echannel') {
+      paymentChannel = 'Mandiri Bill';
+    } else if (payload.payment_type) {
+      // Handle QRIS, GoPay, ShopeePay etc
+      paymentChannel = payload.payment_type.replace(/_/g, ' ').toUpperCase();
+      if (payload.acquirer) {
+        paymentChannel = `${paymentChannel} (${payload.acquirer.toUpperCase()})`;
+      }
+    }
+
+    const shouldUpdateStatus =
       nextStatuses.paymentStatus !== order.payment_status || nextStatuses.orderStatus !== order.status;
 
-    if (shouldUpdate) {
+    // Always update metadata if missing, or if status changed
+    // Fetch current order details to check for missing metadata
+    const { data: currentOrder } = await supabaseAdminClient
+      .from('orders')
+      .select('total_amount, tax_amount, payment_channel')
+      .eq('id', order.id)
+      .single();
+
+    const shouldUpdateMetadata = !currentOrder?.payment_channel || !currentOrder?.tax_amount || currentOrder.tax_amount === 0;
+
+    if (shouldUpdateStatus || shouldUpdateMetadata) {
+      // Calculate tax (10%)
+      const taxAmount = (currentOrder?.tax_amount && currentOrder.tax_amount > 0)
+        ? currentOrder.tax_amount
+        : Math.round((currentOrder?.total_amount || 0) * 0.1);
+
       const { error: updateError } = await supabaseAdminClient
         .from('orders')
         .update({
           payment_status: nextStatuses.paymentStatus,
-          status: nextStatuses.orderStatus
+          status: nextStatuses.orderStatus,
+          payment_channel: currentOrder?.payment_channel || paymentChannel,
+          tax_amount: taxAmount
         })
         .eq('id', order.id);
 
@@ -123,10 +161,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: 'Failed to update order status' }, { status: 500 });
       }
 
-      console.info('[midtrans] order status updated', {
+      console.info('[midtrans] order status/metadata updated', {
         orderId: order.id,
-        previousPaymentStatus: order.payment_status,
-        previousOrderStatus: order.status,
+        paymentChannel,
+        shouldUpdateStatus,
+        shouldUpdateMetadata,
         nextStatuses
       });
 

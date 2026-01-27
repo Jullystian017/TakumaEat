@@ -8,12 +8,15 @@ export async function GET(request: Request) {
         const type = searchParams.get('type');
         const search = searchParams.get('search');
 
+        // Note: Joining with 'users' assumes a foreign key relationship exists. 
+        // If it's a separate auth system, we might need a separate profile table or distinct join logic.
+        // Assuming 'users' table exists and has id, name, email.
         let query = supabaseAdminClient
             .from('orders')
             .select(`
-        *,
-        order_items (*)
-      `)
+                *,
+                users:profiles (name, email)
+            `)
             .order('created_at', { ascending: false });
 
         if (status && status !== 'All') {
@@ -22,8 +25,12 @@ export async function GET(request: Request) {
         if (type && type !== 'All') {
             query = query.eq('order_type', type);
         }
+
+        // If search is used, filtering by order number or customer name (from joint user table if possible, or manual field)
+        // Adjusting or filter to handle joined data search might require RPC or complex query.
+        // For now, filtering by order_id or notes/address.
         if (search) {
-            query = query.or(`order_number.ilike.%${search}%,customer_name.ilike.%${search}%`);
+            query = query.or(`id.ilike.%${search}%,notes.ilike.%${search}%`);
         }
 
         const { data: orders, error } = await query;

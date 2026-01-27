@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
@@ -15,21 +17,28 @@ import {
   Users,
   UtensilsCrossed,
   Search,
-  Filter,
-  Eye,
-  Check,
-  X,
+  CheckCircle,
+  XCircle,
   Clock,
-  ChefHat,
-  Package,
-  Truck,
-  Menu,
-  CheckCircle2,
-  AlertCircle,
-  Save
+  MapPin,
+  Calendar,
+  CreditCard,
+  ChevronDown,
+  Eye,
+  Filter,
+  X,
+  Trash2,
+  Mail,
+  User,
+  ArrowRight,
+  Info,
+  Tag,
+  LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import AdminNotificationDropdown from '@/app/components/AdminNotificationDropdown';
+import { ConfirmationModal, StatusToast, type ToastType } from '@/app/components/AdminActionUI';
 
 interface OrdersClientProps {
   displayName: string;
@@ -37,27 +46,84 @@ interface OrdersClientProps {
   userEmail: string;
 }
 
-export default function OrdersClient({ displayName, displayNameInitial, userEmail }: OrdersClientProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('All');
-  const [selectedOrderType, setSelectedOrderType] = useState<string>('All');
-  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  note?: string;
+  image_url?: string;
+}
 
+interface Order {
+  id: string;
+  created_at: string;
+  status: string;
+  payment_status: string;
+  payment_method: string;
+  order_type: 'delivery' | 'takeaway';
+  total_amount: number;
+  promo_code?: string;
+  discount_amount?: number;
+  delivery_address?: any;
+  pickup_branch_id?: string;
+  schedule_at?: string;
+  notes?: string;
+  users?: {
+    name: string;
+    email: string;
+  };
+}
+
+export default function OrdersClient({ displayName, displayNameInitial, userEmail }: OrdersClientProps) {
+  const [activeTab, setActiveTab] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Profile Dropdown
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
+
+  // Detail Modal
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+
+  // Actions state
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const ordersPerPage = 10;
 
-  function formatCurrency(value: number) {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0
-    }).format(value);
-  }
+  // UI state (Toast & Modal)
+  const [toast, setToast] = useState<{ isOpen: boolean, message: string, type: ToastType }>({
+    isOpen: false,
+    message: '',
+    type: 'success'
+  });
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    orderId: string | null;
+    title: string;
+    message: string;
+    type: 'warning' | 'danger';
+  }>({
+    isOpen: false,
+    orderId: null,
+    title: '',
+    message: '',
+    type: 'warning'
+  });
+
+  const showToast = (message: string, type: ToastType = 'success') => {
+    setToast({ isOpen: true, message, type });
+  };
 
   const navItems: { label: string; href: string; icon: LucideIcon }[] = [
     { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
@@ -70,281 +136,683 @@ export default function OrdersClient({ displayName, displayNameInitial, userEmai
     { label: 'Settings', href: '/admin/settings', icon: Settings }
   ];
 
-  const statusOptions = ['All', 'Menunggu', 'Diproses', 'Siap', 'Dikirim', 'Selesai', 'Dibatalkan'];
+  const statusTabs = [
+    { id: 'All', label: 'Semua' },
+    { id: 'pending_payment', label: 'Menunggu' },
+    { id: 'preparing', label: 'Diproses' },
+    { id: 'ready', label: 'Siap' },
+    { id: 'on_delivery', label: 'Dikirim' },
+    { id: 'completed', label: 'Selesai' },
+    { id: 'cancelled', label: 'Batal' }
+  ];
 
-  const refreshOrders = async () => {
+  const fetchOrders = async () => {
     try {
-      setLoading(true);
-      const url = new URL('/api/admin/orders', window.location.origin);
-      if (selectedStatus !== 'All') url.searchParams.set('status', selectedStatus);
-      if (selectedOrderType !== 'All') url.searchParams.set('type', selectedOrderType);
-      if (searchQuery) url.searchParams.set('search', searchQuery);
-
-      const res = await fetch(url.toString());
+      setIsLoading(true);
+      const res = await fetch('/api/admin/orders');
+      if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       if (data.orders) setOrders(data.orders);
-    } catch (err) {
-      console.error('Fetch orders error:', err);
+    } catch (error) {
+      console.error('Failed to fetch orders', error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    refreshOrders();
-  }, [selectedStatus, selectedOrderType, searchQuery]);
+    fetchOrders();
+  }, []);
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+  const fetchOrderDetails = async (orderId: string) => {
+    try {
+      setIsLoadingDetails(true);
+      const res = await fetch(`/api/admin/orders/${orderId}`);
+      if (!res.ok) throw new Error('Failed to fetch details');
+      const data = await res.json();
+      setOrderItems(data.items || []);
+      if (data.order) {
+        setSelectedOrder(data.order);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoadingDetails(false);
+    }
   };
 
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
+  const handleOpenDetail = (order: Order) => {
+    setSelectedOrder(order);
+    setOrderItems([]);
+    setIsDetailOpen(true);
+    fetchOrderDetails(order.id);
+  };
+
+  const handleCloseDetail = () => {
+    setIsDetailOpen(false);
+    setSelectedOrder(null);
+  };
+
+  const handleStatusUpdate = async (orderId: string, newStatus: string) => {
     try {
-      setIsSaving(true);
+      setIsUpdatingStatus(true);
       const res = await fetch(`/api/admin/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
 
-      if (res.ok) {
-        await refreshOrders();
-        showToast(`Status pesanan berhasil diubah ke ${newStatus}`, 'success');
-        if (selectedOrder && selectedOrder.id === orderId) {
-          setSelectedOrder((prev: any) => prev ? { ...prev, status: newStatus } : null);
-        }
-      } else {
-        showToast('Gagal mengubah status pesanan', 'error');
+      if (!res.ok) throw new Error('Failed to update status');
+
+      const data = await res.json();
+      const updatedOrder = data.order;
+
+      // Update local state if it's the selected order
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(updatedOrder);
       }
-    } catch (err) {
-      showToast('Terjadi kesalahan sistem', 'error');
+
+      setOrders(orders.map(o => o.id === orderId ? updatedOrder : o));
+      showToast('Status pesanan berhasil diperbarui');
+    } catch (error) {
+      showToast('Gagal mengupdate status pesanan', 'error');
+      console.error(error);
     } finally {
-      setIsSaving(false);
+      setIsUpdatingStatus(false);
     }
   };
 
-  const filteredOrders = orders; // Filtering is handled server-side now for search, but let's keep it robust
+  const handlePaymentUpdate = async (orderId: string, newPaymentStatus: string) => {
+    try {
+      setIsUpdatingStatus(true);
+      const res = await fetch(`/api/admin/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_status: newPaymentStatus })
+      });
 
-  // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ordersPerPage));
+      if (!res.ok) throw new Error('Failed to update payment status');
+
+      const data = await res.json();
+      const updatedOrder = data.order;
+
+      // Update local state
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(updatedOrder);
+      }
+
+      setOrders(orders.map(o => o.id === orderId ? updatedOrder : o));
+      showToast('Pembayaran berhasil diverifikasi');
+    } catch (error) {
+      showToast('Gagal memverifikasi pembayaran', 'error');
+      console.error(error);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const initiateDelete = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      orderId: id,
+      title: 'Hapus Pesanan?',
+      message: 'Apakah Anda yakin ingin menghapus pesanan ini? Tindakan ini tidak dapat dibatalkan.',
+      type: 'danger'
+    });
+  };
+
+  const handleDeleteOrder = async () => {
+    const orderId = confirmModal.orderId;
+    if (!orderId) return;
+
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/admin/orders/${orderId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) throw new Error('Failed to delete');
+
+      setOrders(orders.filter(o => o.id !== orderId));
+      if (selectedOrder?.id === orderId) {
+        handleCloseDetail();
+      }
+      showToast('Pesanan berhasil dihapus');
+      setConfirmModal({ ...confirmModal, isOpen: false });
+    } catch (error) {
+      showToast('Gagal menghapus pesanan', 'error');
+      console.error(error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut({ redirect: true, callbackUrl: '/login' });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    if (profileDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [profileDropdownOpen]);
+
+  const filteredOrders = orders.filter((order) => {
+    const matchesTab = activeTab === 'All' || order.status === activeTab;
+    const searchLower = searchQuery.toLowerCase();
+    const idMatch = order.id.toLowerCase().includes(searchLower);
+    const nameMatch = order.users?.name?.toLowerCase().includes(searchLower);
+    const emailMatch = order.users?.email?.toLowerCase().includes(searchLower);
+    return matchesTab && (idMatch || nameMatch || emailMatch);
+  });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
   const indexOfLastOrder = currentPage * ordersPerPage;
   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
   const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
 
-  const getStatusColor = (status: string) => {
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeTab]);
+
+  const getStatusInfo = (status: string) => {
     switch (status) {
-      case 'Menunggu': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'Diproses': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'Siap': return 'bg-cyan-100 text-cyan-700 border-cyan-200';
-      case 'Dikirim': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
-      case 'Selesai': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'Dibatalkan': return 'bg-red-100 text-red-700 border-red-200';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+      case 'completed': return { color: 'bg-emerald-100 text-emerald-700', label: 'Selesai' };
+      case 'cancelled': return { color: 'bg-red-100 text-red-700', label: 'Dibatalkan' };
+      case 'on_delivery': return { color: 'bg-blue-100 text-blue-700', label: 'Dikirim' };
+      case 'ready': return { color: 'bg-purple-100 text-purple-700', label: 'Siap' };
+      case 'preparing': return { color: 'bg-amber-100 text-amber-700', label: 'Diproses' };
+      case 'pending_payment': return { color: 'bg-slate-100 text-slate-700', label: 'Menunggu' };
+      default: return { color: 'bg-slate-100 text-slate-700', label: status };
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Menunggu': return <Clock className="h-4 w-4" />;
-      case 'Diproses': return <ChefHat className="h-4 w-4" />;
-      case 'Siap': return <Package className="h-4 w-4" />;
-      case 'Dikirim': return <Truck className="h-4 w-4" />;
-      case 'Selesai': return <Check className="h-4 w-4" />;
-      case 'Dibatalkan': return <X className="h-4 w-4" />;
-      default: return <Clock className="h-4 w-4" />;
-    }
-  };
+  function formatCurrency(value: number) {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      maximumFractionDigits: 0
+    }).format(value);
+  }
+
+  function formatDate(dateString: string) {
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
 
   return (
     <div className="flex min-h-screen bg-white text-slate-900">
+      {/* Sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 flex-col border-r border-slate-200 bg-white px-6 py-10 lg:flex">
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12"><Image src="/logotakuma.png" alt="Logo" fill className="object-contain" /></div>
-          <div><p className="text-xs uppercase tracking-[0.3em] text-slate-500">TakumaEat</p><p className="text-lg font-semibold text-slate-900">Admin Hub</p></div>
+          <div className="relative h-12 w-12">
+            <Image src="/logotakuma.png" alt="TakumaEat Logo" fill className="object-contain" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">TakumaEat</p>
+            <p className="text-lg font-semibold text-slate-900">Admin Hub</p>
+          </div>
         </div>
         <nav className="mt-12 flex-1 space-y-1">
-          {navItems.map((item) => (
-            <Link key={item.label} href={item.href} className={cn("flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all", item.href === '/admin/orders' ? 'bg-[#EFB036]/10 text-slate-900' : 'text-slate-600 hover:bg-slate-50')}>
-              <item.icon className={cn("h-4 w-4", item.href === '/admin/orders' ? 'text-[#EFB036]' : 'text-[#EFB036]')} />
-              <span>{item.label}</span>
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.href === '/admin/orders';
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${isActive ? 'bg-[#EFB036]/10 text-slate-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+              >
+                <item.icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? 'text-[#EFB036]' : 'text-[#EFB036] group-hover:text-[#f6c15d]'}`} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
       </aside>
 
       <div className="flex flex-1 flex-col">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-6 py-5 backdrop-blur lg:px-10 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-slate-100"><Menu /></button>
+        {/* Header */}
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-6 py-5 backdrop-blur lg:px-10">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-[#EFB036]">Orders Management</p>
-              <h1 className="mt-1 text-xl lg:text-3xl font-semibold">Kelola Pesanan</h1>
+              <h1 className="mt-2 text-2xl font-semibold md:text-3xl">Daftar Pesanan</h1>
+              <p className="mt-2 text-sm text-slate-600">Pantau dan kelola semua pesanan masuk secara real-time.</p>
             </div>
-          </div>
-          <div className="hidden sm:flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-gold text-white font-bold">{displayNameInitial}</div>
-            <div className="flex flex-col"><p className="text-sm font-bold">{displayName}</p><p className="text-xs text-slate-500">{userEmail}</p></div>
-          </div>
-        </header>
+            <div className="flex items-center gap-3">
+              <AdminNotificationDropdown />
+              <div ref={profileDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all hover:bg-slate-50 hover:shadow-md cursor-pointer w-full"
+                >
+                  <div className="flex flex-col text-left">
+                    <p className="text-sm font-semibold text-slate-900">{displayName}</p>
+                    <p className="text-xs text-slate-500">{userEmail}</p>
+                  </div>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#EFB036] to-[#d89a28] text-sm font-bold text-white shadow-md">
+                    {displayNameInitial}
+                  </div>
+                </button>
 
-        <main className="flex-1 bg-slate-50 px-6 py-10 lg:px-10 overflow-y-auto">
-          <div className="mb-8 space-y-6">
-            <div className="relative max-w-md">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-              <input type="text" placeholder="Cari pesanan..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="h-12 w-full rounded-xl border border-slate-200 pl-12 pr-4 text-sm" />
-            </div>
-
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-400 uppercase tracking-widest"><Filter className="h-4 w-4" /> Status:</div>
-              <div className="flex flex-wrap gap-2">
-                {statusOptions.map(opt => (
-                  <button key={opt} onClick={() => setSelectedStatus(opt)} className={cn("px-4 py-2 rounded-full text-xs font-bold transition-all", selectedStatus === opt ? "bg-brand-gold text-black shadow-md" : "bg-white border border-slate-200 text-slate-500 hover:border-brand-gold")}>{opt}</button>
-                ))}
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 origin-top-right overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg z-50">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
+        </header>
 
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-widest text-[10px]">
-                  <tr>
-                    <th className="px-6 py-4">Nomor Order</th>
-                    <th className="px-6 py-4">Pelanggan</th>
-                    <th className="px-6 py-4">Total</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loading ? (
-                    Array.from({ length: 5 }).map((_, i) => <tr key={i} className="animate-pulse"><td colSpan={5} className="px-6 py-4"><div className="h-12 bg-slate-50 rounded" /></td></tr>)
-                  ) : currentOrders.map(order => (
-                    <tr key={order.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">{order.order_number}</div>
-                        <div className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{order.order_type}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-700">{order.customer_name}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">{new Date(order.created_at).toLocaleString()}</div>
-                      </td>
-                      <td className="px-6 py-4 font-bold text-brand-gold">{formatCurrency(order.total_amount)}</td>
-                      <td className="px-6 py-4">
-                        <span className={cn("px-3 py-1 rounded-full text-[10px] font-bold uppercase", getStatusColor(order.status))}>{order.status}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button onClick={() => setSelectedOrder(order)} className="p-2 rounded-lg bg-slate-50 text-slate-400 hover:bg-brand-gold hover:text-black transition-all"><Eye className="h-4 w-4" /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto bg-slate-50 px-6 py-10 lg:px-10">
+          {/* Controls */}
+          <div className="mb-8 flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+            {/* Search - At Left */}
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Cari ID, Nama..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-xs shadow-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
+              />
+            </div>
+
+            {/* Tabs - Modern UI Shrunk and Inline */}
+            <div className="flex overflow-x-auto pb-1 gap-1.5 no-scrollbar">
+              {statusTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "whitespace-nowrap rounded-lg px-4 py-2 text-[11px] font-black uppercase tracking-wider transition-all duration-200 border",
+                    activeTab === tab.id
+                      ? "bg-[#EFB036] text-black border-[#EFB036] shadow-md shadow-[#EFB036]/10"
+                      : "bg-white text-slate-500 border-slate-200 hover:border-[#EFB036] hover:text-[#EFB036]"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {!loading && currentOrders.length === 0 && (
-            <div className="mt-10 flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-dashed border-slate-200">
-              <ShoppingCart className="h-12 w-12 text-slate-200 mb-4" />
-              <p className="font-bold text-slate-400">Belum ada pesanan.</p>
+          {/* Table */}
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            {isLoading ? (
+              <div className="p-20 text-center text-slate-400 flex flex-col items-center gap-4">
+                <div className="h-10 w-10 border-4 border-[#EFB036] border-t-transparent rounded-full animate-spin" />
+                <span>Memuat data pesanan...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">ID & Waktu</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Pelanggan</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Tipe & Metode</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Total</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">Status</th>
+                      <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {currentOrders.length === 0 ? (
+                      <tr><td colSpan={6} className="p-20 text-center text-slate-500">Tidak ada pesanan ditemukan.</td></tr>
+                    ) : (
+                      currentOrders.map((order) => {
+                        const status = getStatusInfo(order.status);
+                        return (
+                          <tr key={order.id} className="hover:bg-slate-50/80 transition-colors group">
+                            <td className="px-6 py-4">
+                              <p className="font-mono text-sm font-bold text-slate-900 group-hover:text-[#EFB036]">#{order.id.slice(0, 8).toUpperCase()}</p>
+                              <p className="mt-1 text-[11px] text-slate-500">{formatDate(order.created_at)}</p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                                  <User size={14} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-slate-900">{order.users?.name || 'Guest User'}</p>
+                                  <p className="text-[10px] text-slate-500">{order.users?.email || '-'}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  {order.order_type === 'delivery' ?
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded"><MapPin size={10} /> Delivery</span> :
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-2 py-0.5 rounded"><Store size={10} /> Takeaway</span>
+                                  }
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <CreditCard size={12} className="text-slate-400" />
+                                  <span className="text-[10px] font-bold uppercase text-slate-500">{order.payment_method}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="text-sm font-bold text-slate-900">{formatCurrency(order.total_amount)}</p>
+                              <p className={cn("text-[10px] font-bold uppercase", order.payment_status === 'paid' ? 'text-emerald-600' : 'text-slate-400')}>{order.payment_status}</p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={cn("px-2.5 py-1 rounded-lg text-[10px] font-bold", status.color)}>
+                                {status.label}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleOpenDetail(order)}
+                                  className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#EFB036] hover:text-black transition-all"
+                                  title="Detail Pesanan"
+                                >
+                                  <Eye size={14} />
+                                </button>
+                                <button
+                                  onClick={() => initiateDelete(order.id)}
+                                  className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all"
+                                  title="Hapus Pesanan"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          {!isLoading && filteredOrders.length > 0 && totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
+              <div className="text-xs text-slate-500 font-medium">
+                Menampilkan <span className="font-bold text-slate-900">{indexOfFirstOrder + 1}</span> - <span className="font-bold text-slate-900">{Math.min(indexOfLastOrder, filteredOrders.length)}</span> dari <span className="font-bold text-slate-900">{filteredOrders.length}</span> pesanan
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+                >
+                  <ChevronDown className="h-4 w-4 rotate-90" />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold transition-all border",
+                      currentPage === page
+                        ? "bg-[#EFB036] border-[#EFB036] text-black shadow-md shadow-[#EFB036]/10"
+                        : "bg-white border-slate-200 text-slate-600 hover:border-[#EFB036] hover:text-[#EFB036]"
+                    )}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white"
+                >
+                  <ChevronDown className="h-4 w-4 -rotate-90" />
+                </button>
+              </div>
             </div>
           )}
         </main>
       </div>
 
-      {/* Detail Modal */}
+      {/* Detail Modal - Enhanced */}
       <AnimatePresence>
-        {selectedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-2xl bg-white rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-              <div className="p-8 border-b border-slate-100 flex justify-between items-center">
-                <div>
-                  <h2 className="text-2xl font-bold">Detail Pesanan</h2>
-                  <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">{selectedOrder.order_number}</p>
+        {isDetailOpen && selectedOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm transition-all overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 p-6 bg-slate-50/50 flex-shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-[#EFB036]/10 flex items-center justify-center text-[#EFB036]">
+                    <ShoppingCart size={24} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-xl font-bold text-slate-900">Pesanan #{selectedOrder.id.slice(0, 8).toUpperCase()}</h2>
+                      <span className={cn("px-3 py-1 rounded-full text-[10px] font-bold uppercase", getStatusInfo(selectedOrder.status).color)}>
+                        {getStatusInfo(selectedOrder.status).label}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500 font-medium">{formatDate(selectedOrder.created_at)}</p>
+                  </div>
                 </div>
-                <button onClick={() => setSelectedOrder(null)} className="p-2 rounded-full hover:bg-slate-50"><X /></button>
+                <button onClick={handleCloseDetail} className="p-2 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-red-500 transition-all shadow-sm">
+                  <X className="h-5 w-5" />
+                </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                <div className="grid grid-cols-2 gap-8">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Informasi User</p>
-                    <p className="font-bold text-slate-900">{selectedOrder.customer_name}</p>
-                    <p className="text-sm text-slate-500 mt-1">{selectedOrder.customer_phone}</p>
-                    {selectedOrder.address && <p className="text-sm text-slate-500 mt-2 p-3 bg-slate-50 rounded-xl">{selectedOrder.address}</p>}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Status Pesanan</p>
-                    <select
-                      value={selectedOrder.status}
-                      onChange={e => handleStatusChange(selectedOrder.id, e.target.value)}
-                      disabled={isSaving}
-                      className="w-full h-11 border border-slate-200 rounded-xl px-4 font-bold text-sm bg-slate-50"
-                    >
-                      {statusOptions.filter(s => s !== 'All').map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Pesanan</p>
-                  <div className="space-y-3">
-                    {selectedOrder.order_items?.map((item: any) => (
-                      <div key={item.id} className="flex justify-between items-center py-3 border-b border-slate-50">
-                        <div>
-                          <p className="font-bold text-slate-800">{item.name}</p>
-                          <p className="text-xs text-slate-400">Qty: {item.quantity}</p>
-                        </div>
-                        <p className="font-bold">{formatCurrency(item.price * item.quantity)}</p>
+              {/* Modal Body - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="grid gap-6 lg:grid-cols-5">
+                  {/* Items Section */}
+                  <div className="lg:col-span-3 space-y-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                      <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/30 flex justify-between items-center">
+                        <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2"><UtensilsCrossed size={16} className="text-[#EFB036]" /> Item Pesanan</h3>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold">{orderItems.length} ITEM</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                <div className="p-6 bg-brand-gold/10 rounded-2xl border border-brand-gold/20 flex justify-between items-center">
-                  <p className="font-bold uppercase text-xs tracking-widest">Total Pembayaran</p>
-                  <p className="text-2xl font-bold text-brand-gold">{formatCurrency(selectedOrder.total_amount)}</p>
+                      <div className="divide-y divide-slate-100">
+                        {isLoadingDetails ? (
+                          <div className="p-10 text-center text-slate-400 flex flex-col items-center gap-3">
+                            <div className="h-6 w-6 border-2 border-[#EFB036] border-t-transparent rounded-full animate-spin" />
+                            <span className="text-xs font-medium">Memuat item...</span>
+                          </div>
+                        ) : orderItems.length === 0 ? (
+                          <div className="p-10 text-center text-slate-400 text-sm">Tidak ada item.</div>
+                        ) : orderItems.map(item => (
+                          <div key={item.id} className="p-4 flex gap-4 hover:bg-slate-50/80 transition-colors">
+                            <div className="h-14 w-14 bg-slate-100 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100 font-bold text-[#8d5814]">
+                              {item.image_url ? (
+                                <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center text-slate-400">
+                                  <UtensilsCrossed size={18} />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="min-w-0">
+                                  <p className="font-bold text-slate-900 text-sm truncate">{item.name}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">{item.quantity}x @ {formatCurrency(item.price)}</p>
+                                </div>
+                                <p className="font-bold text-slate-900 text-sm flex-shrink-0">{formatCurrency(item.price * item.quantity)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Payment Summary */}
+                      <div className="bg-slate-900 p-6 text-white space-y-3">
+                        {!!selectedOrder.discount_amount && (
+                          <div className="flex justify-between text-xs font-bold text-red-400">
+                            <span className="flex items-center gap-1.5"><Tag size={14} /> Diskon ({selectedOrder.promo_code})</span>
+                            <span>- {formatCurrency(selectedOrder.discount_amount)}</span>
+                          </div>
+                        )}
+                        <div className="pt-3 border-t border-slate-800 flex justify-between items-end">
+                          <div>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Total Pembayaran</p>
+                            <h4 className="text-2xl font-black text-[#EFB036] leading-none">{formatCurrency(selectedOrder.total_amount)}</h4>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold flex items-center gap-1.5 text-xs"><CreditCard size={12} className="text-[#EFB036]" /> {selectedOrder.payment_method.toUpperCase()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sidebar Info Section */}
+                  <div className="lg:col-span-2 space-y-4">
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                      <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2"><MapPin size={16} className="text-[#EFB036]" /> Lokasi & Waktu</h3>
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-3">{selectedOrder.order_type === 'delivery' ? 'Alamat Pengiriman' : 'Informasi Pengambilan'}</p>
+                        {selectedOrder.order_type === 'delivery' ? (
+                          <div className="space-y-2">
+                            <p className="text-sm font-bold text-slate-900 leading-tight">{selectedOrder.delivery_address?.fullName}</p>
+                            <p className="text-xs text-slate-500">{selectedOrder.delivery_address?.phone}</p>
+                            <div className="flex gap-2 items-start text-[11px] text-slate-600">
+                              <MapPin size={14} className="text-[#EFB036] flex-shrink-0 mt-0.5" />
+                              <p className="leading-relaxed">{selectedOrder.delivery_address?.addressLine}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="flex gap-2 items-center text-sm font-bold text-slate-900">
+                              <Store size={16} className="text-[#EFB036]" />
+                              <p>Cabang ID: {selectedOrder.pickup_branch_id}</p>
+                            </div>
+                            <div className="flex gap-2 items-center text-xs text-slate-600 font-bold">
+                              <Clock size={16} className="text-[#EFB036]" />
+                              <p>{selectedOrder.schedule_at ? formatDate(selectedOrder.schedule_at) : 'ASAP (SEGERA)'}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Order Notes */}
+                    {selectedOrder.notes && (
+                      <div className="bg-amber-50 rounded-2xl border border-amber-100 p-5 space-y-3">
+                        <h3 className="font-bold text-amber-900 text-sm flex items-center gap-2"><Info size={16} className="text-amber-500" /> Catatan Pesanan</h3>
+                        <p className="text-xs text-amber-800 leading-relaxed font-medium bg-white/50 p-3 rounded-xl border border-amber-100/50">
+                          {selectedOrder.notes}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Status Update Card */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200">
+                      <h3 className="font-bold text-slate-900 text-sm mb-4 flex items-center gap-2"><ArrowRight size={16} className="text-[#EFB036]" /> Status & Pembayaran</h3>
+
+                      {selectedOrder.payment_method === 'cod' && selectedOrder.payment_status !== 'paid' && (
+                        <button
+                          onClick={() => handlePaymentUpdate(selectedOrder.id, 'paid')}
+                          disabled={isUpdatingStatus}
+                          className="w-full mb-4 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-emerald-600/20 transition-all border border-emerald-500/50"
+                        >
+                          <CheckCircle size={18} />
+                          VERIFIKASI PEMBAYARAN TUNAI
+                        </button>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {statusTabs.filter(t => t.id !== 'All').map(tab => (
+                          <button
+                            key={tab.id}
+                            onClick={() => handleStatusUpdate(selectedOrder.id, tab.id)}
+                            disabled={isUpdatingStatus || selectedOrder.status === tab.id}
+                            className={cn(
+                              "text-left px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
+                              selectedOrder.status === tab.id
+                                ? "bg-[#EFB036] text-black border-[#EFB036] shadow-md shadow-[#EFB036]/10"
+                                : "bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-600"
+                            )}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-8 border-t border-slate-100 flex gap-4">
-                <button onClick={() => setSelectedOrder(null)} className="flex-1 h-12 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-all">Tutup</button>
+              {/* Modal Footer */}
+              <div className="border-t border-slate-100 p-6 flex justify-between items-center bg-slate-50/50 flex-shrink-0">
+                <button
+                  onClick={() => initiateDelete(selectedOrder.id)}
+                  disabled={isDeleting}
+                  className="flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={16} />
+                  Hapus Pesanan
+                </button>
+                <button
+                  onClick={handleCloseDetail}
+                  className="px-6 py-3 rounded-2xl bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Tutup
+                </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Mobile Drawer */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMobileMenuOpen(false)} className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm lg:hidden" />
-            <motion.aside initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} className="fixed inset-y-0 left-0 z-[70] w-72 bg-white px-6 py-10 lg:hidden shadow-2xl">
-              <div className="flex items-center justify-between mb-10 text-slate-900 font-bold text-lg"><div className="flex items-center gap-3"><Image src="/logotakuma.png" alt="Logo" width={40} height={40} /> Admin Hub</div><button onClick={() => setMobileMenuOpen(false)}><X /></button></div>
-              <nav className="space-y-1">
-                {navItems.map((item) => (
-                  <Link key={item.label} href={item.href} onClick={() => setMobileMenuOpen(false)} className={cn("flex items-center gap-4 rounded-2xl px-5 py-4 text-sm font-bold transition-all", item.href === '/admin/orders' ? 'bg-[#EFB036] text-black shadow-lg shadow-brand-gold/20' : 'text-slate-500 hover:bg-slate-50')}>
-                    <item.icon className="h-5 w-5" />
-                    <span>{item.label}</span>
-                  </Link>
-                ))}
-              </nav>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Action UI Overlay */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={handleDeleteOrder}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        isLoading={isDeleting}
+        confirmLabel="Ya, Hapus"
+      />
 
-      {/* Toast Notification */}
       <AnimatePresence>
-        {toast && (
-          <motion.div initial={{ opacity: 0, y: 50, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }} className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] min-w-[320px]">
-            <div className={cn("flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-md", toast.type === 'success' ? "bg-emerald-500/90 text-white border border-emerald-400/20" : "bg-red-500/90 text-white border border-red-400/20")}>
-              {toast.type === 'success' ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-100" /> : <AlertCircle className="h-5 w-5 shrink-0 text-red-100" />}
-              <p className="text-sm font-bold tracking-wide">{toast.message}</p>
-            </div>
-          </motion.div>
+        {toast.isOpen && (
+          <StatusToast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast({ ...toast, isOpen: false })}
+          />
         )}
       </AnimatePresence>
     </div>

@@ -15,7 +15,6 @@ import {
   Megaphone,
   Settings,
   ShoppingCart,
-  Star,
   Store,
   TrendingUp,
   Users,
@@ -23,13 +22,17 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  Tag,
   Menu,
-  X
+  X,
+  PieChart as PieChartIcon
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend
+} from 'recharts';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import AdminNotificationDropdown from '@/app/components/AdminNotificationDropdown';
 
 interface DashboardClientProps {
   displayName: string;
@@ -45,15 +48,24 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
 
   // Stats State
   const [stats, setStats] = useState<any>(null);
+  const [orderData, setOrderData] = useState<any[]>([]);
+  const [topSelling, setTopSelling] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [period, setPeriod] = useState<'day' | 'month' | 'year'>('month');
 
   useEffect(() => {
     async function fetchStats() {
       try {
         setLoadingStats(true);
-        const res = await fetch('/api/admin/stats');
+        const res = await fetch(`/api/admin/stats?period=${period}`);
         const data = await res.json();
+
         if (data.stats) setStats(data.stats);
+        if (data.orderData) setOrderData(data.orderData);
+        if (data.topSelling) setTopSelling(data.topSelling);
+        if (data.recentOrders) setRecentOrders(data.recentOrders);
+
       } catch (err) {
         console.error('Stats fetch error:', err);
       } finally {
@@ -61,7 +73,7 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
       }
     }
     fetchStats();
-  }, []);
+  }, [period]);
 
   function formatCurrency(value: number) {
     return new Intl.NumberFormat('id-ID', {
@@ -102,7 +114,7 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
     { label: 'Settings', href: '/admin/settings', icon: Settings }
   ];
 
-  const statCards: { label: string; value: string; change: string; isPositive: boolean; icon: LucideIcon }[] = [
+  const statCards = [
     {
       label: 'Total Orders',
       value: stats?.totalOrders?.value?.toString() || '0',
@@ -118,10 +130,10 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
       icon: Coins
     },
     {
-      label: 'New Customers',
-      value: stats?.newCustomers?.value?.toString() || '0',
-      change: stats?.newCustomers?.change || '0%',
-      isPositive: stats?.newCustomers?.isPositive ?? true,
+      label: 'Total Customers',
+      value: stats?.customers?.value?.toString() || '0',
+      change: stats?.customers?.change || '+0%',
+      isPositive: stats?.customers?.isPositive ?? true,
       icon: Users
     },
     {
@@ -133,30 +145,7 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
     }
   ];
 
-  const orderData = [
-    { day: 'Sen', orders: 145 },
-    { day: 'Sel', orders: 168 },
-    { day: 'Rab', orders: 154 },
-    { day: 'Kam', orders: 176 },
-    { day: 'Jum', orders: 212 },
-    { day: 'Sab', orders: 234 },
-    { day: 'Min', orders: 198 }
-  ];
-
-  const recentOrders: { id: string; customer: string; items: string; total: number; status: string; time: string }[] = [
-    { id: '#ORD-1284', customer: 'Budi Santoso', items: 'Takoyaki Supreme, Ramen', total: 185_000, status: 'Completed', time: '10 min ago' },
-    { id: '#ORD-1283', customer: 'Siti Aminah', items: 'Sushi Set, Green Tea', total: 245_000, status: 'Processing', time: '15 min ago' },
-    { id: '#ORD-1282', customer: 'Ahmad Rizki', items: 'Bento Box', total: 125_000, status: 'Completed', time: '22 min ago' },
-    { id: '#ORD-1281', customer: 'Dewi Lestari', items: 'Ramen, Gyoza', total: 165_000, status: 'Pending', time: '28 min ago' },
-    { id: '#ORD-1280', customer: 'Eko Prasetyo', items: 'Takoyaki, Ocha', total: 95_000, status: 'Completed', time: '35 min ago' }
-  ];
-
-  const topSellingMenu: { name: string; category: string; sold: number; revenue: number; image: string }[] = [
-    { name: 'Takoyaki Supreme', category: 'Appetizer', sold: 342, revenue: 51_300_000, image: '/menu/takoyaki.jpg' },
-    { name: 'Signature Ramen', category: 'Main Course', sold: 298, revenue: 44_700_000, image: '/menu/ramen.jpg' },
-    { name: 'Sushi Platter', category: 'Main Course', sold: 256, revenue: 51_200_000, image: '/menu/sushi.jpg' },
-    { name: 'Bento Box', category: 'Main Course', sold: 234, revenue: 29_250_000, image: '/menu/bento.jpg' }
-  ];
+  const PIE_COLORS = ['#EFB036', '#1f1a11', '#FF8042', '#0088FE'];
 
   return (
     <div className="flex min-h-screen bg-white text-slate-900">
@@ -196,13 +185,6 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
             );
           })}
         </nav>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-900">Laporan Bulanan</p>
-          <p className="mt-2 text-xs text-slate-600">Pantau laporan rinci untuk menjaga ritme pertumbuhan setiap cabang.</p>
-          <button className="mt-4 h-9 w-full rounded-full bg-[#EFB036] px-4 text-xs font-semibold text-black hover:bg-[#dfa028]">
-            Unduh PDF
-          </button>
-        </div>
       </aside>
 
       <div className="flex flex-1 flex-col">
@@ -226,24 +208,23 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
             </div>
             <div className="flex items-center gap-3">
               <button
-                type="button"
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:bg-slate-50 hover:shadow"
+                onClick={() => window.print()}
+                className="hidden lg:flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
               >
-                <Bell className="h-5 w-5" />
+                <BarChart3 size={14} />
+                Download Laporan
               </button>
+              <AdminNotificationDropdown />
               <div ref={profileDropdownRef} className="relative">
                 <button
                   type="button"
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                   className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all hover:bg-slate-50 hover:shadow-md cursor-pointer w-full"
                 >
-                  {/* Nama dan email di kiri */}
                   <div className="flex flex-col text-left">
                     <p className="text-sm font-semibold text-slate-900">{displayName}</p>
                     <p className="text-xs text-slate-500">{userEmail}</p>
                   </div>
-
-                  {/* Inisial di kanan */}
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#EFB036] to-[#d89a28] text-sm font-bold text-white shadow-md">
                     {displayNameInitial}
                   </div>
@@ -262,12 +243,28 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
                   </div>
                 )}
               </div>
-
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-slate-50 px-6 py-10 lg:px-10">
+        {/* PRINT ONLY HEADER */}
+        <div className="hidden print:flex justify-between items-center border-b-2 border-slate-900 pb-6 mb-6 w-full">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 relative text-black">
+              <Image src="/logotakuma.png" alt="Logo" fill className="object-contain" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">TakumaEat</h1>
+              <p className="text-[10px] font-bold text-[#EFB036] tracking-[0.3em] uppercase">Operational Report • {period}ly Overview</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date Generated</p>
+            <p className="text-sm font-black text-slate-900">{new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          </div>
+        </div>
+
+        <main className="flex-1 overflow-y-auto bg-slate-50 px-6 py-10 lg:px-10 print:bg-white print:p-0">
           {/* Summary Cards */}
           <section className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
             {statCards.map((card) => (
@@ -299,140 +296,185 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
             ))}
           </section>
 
-          {/* Charts and Tables */}
-          <section className="mt-8 grid gap-6 lg:grid-cols-2">
-            {/* Daily Orders Chart */}
+          {/* Charts Row 1 */}
+          {/* Row 1: Statistik Pesanan (Full Width) */}
+          <section className="mt-8 grid grid-cols-1">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="mb-6">
-                <h2 className="text-lg font-bold text-slate-900">Daily Orders</h2>
-                <p className="text-sm text-slate-500">Order volume for the last 7 days</p>
+                <h2 className="text-lg font-bold text-slate-900">Statistik Penjualan</h2>
+                <p className="text-sm text-slate-500">Volume transaksi berdasarkan periode waktu</p>
               </div>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={orderData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="day" stroke="#64748b" style={{ fontSize: '12px' }} />
-                  <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }}
-                  />
-                  <Line type="monotone" dataKey="orders" stroke="#EFB036" strokeWidth={3} dot={{ fill: '#EFB036', r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Top Selling Menu */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Top Selling Menu</h2>
-                  <p className="text-sm text-slate-500">Best performing items this month</p>
-                </div>
-                <Star className="h-5 w-5 text-[#EFB036]" />
-              </div>
-              <div className="space-y-4">
-                {topSellingMenu.map((menu, index) => (
-                  <div
-                    key={menu.name}
-                    className="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:border-[#EFB036]/30 hover:bg-[#EFB036]/5"
+              <div className="mb-6 flex gap-2 print:hidden">
+                {[
+                  { id: 'day', label: 'Hari Ini' },
+                  { id: 'month', label: 'Bulan Ini' },
+                  { id: 'year', label: 'Tahun Ini' }
+                ].map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setPeriod(p.id as any)}
+                    className={cn(
+                      "px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border",
+                      period === p.id
+                        ? "bg-[#EFB036] text-black border-[#EFB036] shadow-md shadow-[#EFB036]/20"
+                        : "bg-white text-slate-400 border-slate-200 hover:border-[#EFB036]/50 hover:text-[#EFB036]"
+                    )}
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#EFB036]/10 text-sm font-bold text-[#EFB036]">
-                      #{index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">{menu.name}</p>
-                      <p className="text-xs text-slate-500">{menu.category}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-[#EFB036]">{menu.sold} sold</p>
-                      <p className="text-xs text-slate-500">{formatCurrency(menu.revenue)}</p>
-                    </div>
-                  </div>
+                    {p.label}
+                  </button>
                 ))}
+              </div>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={orderData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="day" stroke="#64748b" style={{ fontSize: '12px' }} />
+                    <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                    />
+                    <Line type="monotone" dataKey="orders" stroke="#EFB036" strokeWidth={3} dot={{ fill: '#EFB036', r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </section>
 
-          {/* Recent Orders Table */}
-          <section className="mt-8">
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">Recent Orders</h2>
-                    <p className="text-sm text-slate-500">Latest customer orders and their status</p>
-                  </div>
-                  <Link
-                    href="/admin/orders"
-                    className="text-sm font-semibold text-[#EFB036] transition-colors hover:text-[#d89a28]"
-                  >
-                    View All →
-                  </Link>
+          {/* Row 2: Top Selling & Customer Insight (Side by Side) */}
+          <section className="mt-8 grid gap-6 lg:grid-cols-2">
+            {/* Top Selling */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Top Selling Menu</h2>
+                  <p className="text-sm text-slate-500">Menu paling laris bulan ini</p>
                 </div>
+                <Coins className="h-5 w-5 text-[#EFB036]" />
+              </div>
+              <div className="space-y-4">
+                {topSelling.map((menu, index) => (
+                  <div
+                    key={menu.name}
+                    className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-3 transition-all hover:border-[#EFB036]/30 hover:bg-[#EFB036]/5 group"
+                  >
+                    <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-slate-100 font-bold text-[#8d5814]">
+                      {menu.image ? (
+                        <img src={menu.image} alt={menu.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center bg-slate-50 text-slate-300">
+                          <UtensilsCrossed size={20} />
+                        </div>
+                      )}
+                      <div className="absolute top-0 left-0 bg-[#EFB036] text-black text-[9px] font-black px-1.5 py-0.5 rounded-br-lg shadow-sm">
+                        #{index + 1}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-slate-900 text-sm truncate">{menu.name}</p>
+                      <p className="text-[10px] uppercase font-black tracking-widest text-[#EFB036]">{menu.sold} Terjual</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-black text-slate-900">{formatCurrency(menu.revenue)}</p>
+                    </div>
+                  </div>
+                ))}
+                {topSelling.length === 0 && <p className="text-center text-slate-500 text-sm py-4 italic">Belum ada data penjualan.</p>}
+              </div>
+            </div>
+
+            {/* Customer Insight */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col">
+              <div className="mb-4">
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <PieChartIcon className="h-5 w-5 text-[#EFB036]" />
+                  Customer Insight
+                </h2>
+                <p className="text-sm text-slate-500">Distribusi Tipe Pesanan</p>
+              </div>
+              <div className="flex-1 min-h-[250px] relative">
+                {stats?.distribution ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={stats.distribution}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {stats.distribution.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={entry.color || PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-slate-400 text-sm">No Data Available</div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Row 3: Recent Orders (Full Width) */}
+          <section className="mt-8 grid grid-cols-1">
+            {/* Recent Orders */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h2 className="text-lg font-bold text-slate-900">Recent Orders</h2>
+                <Link href="/admin/orders" className="text-xs font-bold text-[#EFB036] hover:underline uppercase tracking-wide">View All</Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                        Order ID
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                        Customer
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                        Items
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                        Total
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
-                        Time
-                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">ID</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Total</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200">
+                  <tbody className="divide-y divide-slate-100">
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="transition-colors hover:bg-slate-50">
                         <td className="px-6 py-4">
-                          <p className="font-semibold text-slate-900">{order.id}</p>
+                          <p className="font-bold text-xs text-slate-900 uppercase tracking-tighter">{order.id}</p>
+                          <p className="text-[10px] text-slate-500 font-medium">{order.time}</p>
                         </td>
                         <td className="px-6 py-4">
-                          <p className="font-medium text-slate-900">{order.customer}</p>
+                          <p className="font-black text-sm text-slate-900">{formatCurrency(order.total)}</p>
+                          <span className="text-[10px] uppercase font-black tracking-widest text-[#EFB036]">{order.order_type}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <p className="text-sm text-slate-600">{order.items}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="font-semibold text-slate-900">{formatCurrency(order.total)}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${order.status === 'Completed'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : order.status === 'Processing'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-amber-100 text-amber-700'
-                              }`}
-                          >
-                            {order.status}
+                          <span className={cn("px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
+                            order.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                              order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                order.status === 'on_delivery' ? 'bg-blue-100 text-blue-700' :
+                                  order.status === 'ready' ? 'bg-purple-100 text-purple-700' :
+                                    order.status === 'preparing' ? 'bg-amber-100 text-amber-700' :
+                                      'bg-slate-100 text-slate-700'
+                          )}>
+                            {order.status === 'completed' ? 'Selesai' :
+                              order.status === 'cancelled' ? 'Batal' :
+                                order.status === 'preparing' ? 'Proses' :
+                                  order.status === 'ready' ? 'Siap' :
+                                    order.status === 'on_delivery' ? 'Kirim' :
+                                      'Menunggu'
+                            }
                           </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1 text-sm text-slate-500">
-                            <Clock className="h-4 w-4" />
-                            {order.time}
-                          </div>
                         </td>
                       </tr>
                     ))}
+                    {recentOrders.length === 0 && (
+                      <tr><td colSpan={3} className="p-6 text-center text-slate-500 text-sm">Belum ada order.</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -440,6 +482,7 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
           </section>
         </main>
       </div>
+
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {mobileMenuOpen && (
@@ -487,6 +530,88 @@ export default function DashboardClient({ displayName, displayNameInitial, userE
           </>
         )}
       </AnimatePresence>
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 0.5cm;
+          }
+          
+          body {
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          aside, 
+          header,
+          .print\:hidden,
+          button,
+          .mb-6.flex.gap-2,
+          .mt-1.text-xs.md\:text-sm.text-slate-600 { 
+            display: none !important;
+          }
+
+          main {
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+
+          .rounded-2xl, .rounded-[32px], article, section, div {
+            box-shadow: none !important;
+          }
+
+          /* Compact grids for 1-page layout */
+          .grid {
+             display: grid !important;
+             gap: 0.5rem !important;
+          }
+          
+          .sm\:grid-cols-2, .xl\:grid-cols-4 {
+             grid-template-columns: repeat(4, 1fr) !important;
+          }
+
+          /* Force Statistik and Recent Orders to be Full Width */
+          .grid-cols-1 {
+             grid-template-columns: 1fr !important;
+          }
+          
+          /* Top Selling & Insight Side-by-side */
+          .lg\:grid-cols-2 {
+             grid-template-columns: 1.2fr 0.8fr !important;
+          }
+
+          /* PREVENT CHART BLEED - CRITICAL */
+          .h-\[300px\], .min-h-\[250px\], .recharts-responsive-container { 
+             height: 150px !important; 
+             min-height: 150px !important;
+             max-height: 150px !important;
+             overflow: hidden !important; 
+          }
+
+          .mt-8 { margin-top: 2rem !important; }
+          .p-6, .p-5, .p-4 { padding: 0.4rem !important; }
+          
+          /* First mt-8 (Statistik) should stay closer to stats cards */
+          section.mt-8:first-of-type {
+             margin-top: 0.5rem !important;
+          }
+
+          /* Adjust font sizes */
+          h1 { font-size: 18px !important; }
+          h2, h3 { color: black !important; font-size: 11px !important; }
+          p, span, td, th { color: #334155 !important; font-size: 9px !important; }
+          .text-3xl { font-size: 1.1rem !important; }
+          .text-lg { font-size: 0.8rem !important; }
+          .text-xs { font-size: 8px !important; }
+          
+          article, .rounded-2xl {
+            break-inside: avoid;
+            border: 1px solid #e2e8f0 !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

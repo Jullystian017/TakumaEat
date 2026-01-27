@@ -23,8 +23,10 @@ import {
   Phone,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  ExternalLink
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface BranchesClientProps {
   displayName: string;
@@ -36,39 +38,31 @@ interface Branch {
   id: string;
   name: string;
   address: string;
-  city: string;
   phone: string;
-  openingHours: string;
-  isActive: boolean;
-  manager: string;
-  totalOrders: number;
-  revenue: number;
+  operation_hours: string;
+  map_url?: string;
+  is_active: boolean;
+  created_at?: string;
 }
 
 export default function BranchesClient({ displayName, displayNameInitial, userEmail }: BranchesClientProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
-  const [formData, setFormData] = useState<Omit<Branch, 'id' | 'totalOrders' | 'revenue'>>({
+  const [formData, setFormData] = useState<Partial<Branch>>({
     name: '',
     address: '',
-    city: '',
     phone: '',
-    openingHours: '',
-    isActive: true,
-    manager: ''
+    operation_hours: '',
+    map_url: '',
+    is_active: true
   });
-
-  function formatCurrency(value: number) {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      maximumFractionDigits: 0
-    }).format(value);
-  }
 
   const navItems: { label: string; href: string; icon: LucideIcon }[] = [
     { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
@@ -81,87 +75,25 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
     { label: 'Settings', href: '/admin/settings', icon: Settings }
   ];
 
+  const fetchBranches = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/admin/branches');
+      const data = await res.json();
+      if (data.branches) setBranches(data.branches);
+    } catch (error) {
+      console.error('Failed to fetch branches', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Initialize with sample branches
-    setBranches([
-      {
-        id: '1',
-        name: 'TakumaEat Jakarta Pusat',
-        address: 'Jl. Sudirman No. 123, Tanah Abang',
-        city: 'Jakarta Pusat',
-        phone: '021-12345678',
-        openingHours: '10:00 - 22:00',
-        isActive: true,
-        manager: 'Budi Santoso',
-        totalOrders: 1245,
-        revenue: 125000000
-      },
-      {
-        id: '2',
-        name: 'TakumaEat Jakarta Selatan',
-        address: 'Jl. Gatot Subroto No. 45, Kuningan',
-        city: 'Jakarta Selatan',
-        phone: '021-87654321',
-        openingHours: '10:00 - 22:00',
-        isActive: true,
-        manager: 'Siti Aminah',
-        totalOrders: 987,
-        revenue: 98000000
-      },
-      {
-        id: '3',
-        name: 'TakumaEat Bandung',
-        address: 'Jl. Dago No. 88, Coblong',
-        city: 'Bandung',
-        phone: '022-11223344',
-        openingHours: '10:00 - 21:00',
-        isActive: true,
-        manager: 'Ahmad Rizki',
-        totalOrders: 756,
-        revenue: 75000000
-      },
-      {
-        id: '4',
-        name: 'TakumaEat Surabaya',
-        address: 'Jl. Tunjungan No. 67, Genteng',
-        city: 'Surabaya',
-        phone: '031-55667788',
-        openingHours: '10:00 - 22:00',
-        isActive: true,
-        manager: 'Dewi Lestari',
-        totalOrders: 892,
-        revenue: 89000000
-      },
-      {
-        id: '5',
-        name: 'TakumaEat Bali',
-        address: 'Jl. Sunset Road No. 99, Kuta',
-        city: 'Bali',
-        phone: '0361-998877',
-        openingHours: '09:00 - 23:00',
-        isActive: true,
-        manager: 'Eko Prasetyo',
-        totalOrders: 1123,
-        revenue: 112000000
-      },
-      {
-        id: '6',
-        name: 'TakumaEat Yogyakarta',
-        address: 'Jl. Malioboro No. 22, Gedongtengen',
-        city: 'Yogyakarta',
-        phone: '0274-334455',
-        openingHours: '10:00 - 21:00',
-        isActive: false,
-        manager: 'Rina Susanti',
-        totalOrders: 234,
-        revenue: 23000000
-      }
-    ]);
+    fetchBranches();
   }, []);
 
   const filteredBranches = branches.filter((branch) =>
     branch.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    branch.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
     branch.address.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -171,22 +103,20 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
       setFormData({
         name: branch.name,
         address: branch.address,
-        city: branch.city,
         phone: branch.phone,
-        openingHours: branch.openingHours,
-        isActive: branch.isActive,
-        manager: branch.manager
+        operation_hours: branch.operation_hours,
+        map_url: branch.map_url || '',
+        is_active: branch.is_active
       });
     } else {
       setEditingBranch(null);
       setFormData({
         name: '',
         address: '',
-        city: '',
         phone: '',
-        openingHours: '',
-        isActive: true,
-        manager: ''
+        operation_hours: '',
+        map_url: '',
+        is_active: true
       });
     }
     setIsModalOpen(true);
@@ -197,38 +127,69 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
     setEditingBranch(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (editingBranch) {
-      setBranches(branches.map(b => 
-        b.id === editingBranch.id 
-          ? { ...b, ...formData }
-          : b
-      ));
-    } else {
-      const newBranch: Branch = {
-        id: Date.now().toString(),
-        ...formData,
-        totalOrders: 0,
-        revenue: 0
-      };
-      setBranches([...branches, newBranch]);
+    setIsSubmitting(true);
+
+    try {
+      const url = '/api/admin/branches';
+      const method = editingBranch ? 'PUT' : 'POST';
+      const body = editingBranch ? { id: editingBranch.id, ...formData } : formData;
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to save branch');
+      }
+
+      await fetchBranches();
+      handleCloseModal();
+    } catch (error: any) {
+      alert(error?.message || 'Gagal menyimpan data cabang');
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    handleCloseModal();
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus cabang ini?')) {
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus cabang ini?')) return;
+
+    try {
+      const res = await fetch(`/api/admin/branches?id=${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) throw new Error('Failed to delete branch');
+
       setBranches(branches.filter(b => b.id !== id));
+    } catch (error) {
+      alert('Gagal menghapus cabang');
+      console.error(error);
     }
   };
 
-  const handleToggleActive = (id: string) => {
-    setBranches(branches.map(b => 
-      b.id === id ? { ...b, isActive: !b.isActive } : b
-    ));
+  const handleToggleActive = async (branch: Branch) => {
+    try {
+      const res = await fetch('/api/admin/branches', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: branch.id, is_active: !branch.is_active })
+      });
+
+      if (!res.ok) throw new Error('Failed to update status');
+
+      setBranches(branches.map(b =>
+        b.id === branch.id ? { ...b, is_active: !b.is_active } : b
+      ));
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   return (
@@ -251,9 +212,8 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
               <Link
                 key={item.label}
                 href={item.href}
-                className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
-                  isActive ? 'bg-[#EFB036]/10 text-slate-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${isActive ? 'bg-[#EFB036]/10 text-slate-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
               >
                 <item.icon className={`h-4 w-4 transition-colors duration-200 ${isActive ? 'text-[#EFB036]' : 'text-[#EFB036] group-hover:text-[#f6c15d]'}`} />
                 <span>{item.label}</span>
@@ -297,7 +257,7 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Cari nama cabang, kota, atau alamat..."
+                placeholder="Cari nama cabang atau alamat..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-sm shadow-sm transition-all placeholder:text-slate-400 focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
@@ -313,89 +273,81 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
           </div>
 
           {/* Branches Grid */}
-          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-            {filteredBranches.map((branch) => (
-              <div key={branch.id} className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-lg">
-                {/* Status Badge */}
-                <div className="absolute right-4 top-4 z-10">
-                  <button
-                    onClick={() => handleToggleActive(branch.id)}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                      branch.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    {branch.isActive ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                    {branch.isActive ? 'Aktif' : 'Nonaktif'}
-                  </button>
-                </div>
-
-                <div className="p-6">
-                  {/* Branch Name */}
-                  <div className="mb-4 flex items-start gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EFB036]/10">
-                      <Store className="h-6 w-6 text-[#EFB036]" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-bold text-slate-900">{branch.name}</h3>
-                      <p className="text-sm text-slate-500">{branch.city}</p>
-                    </div>
-                  </div>
-
-                  {/* Details */}
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-start gap-2 text-slate-600">
-                      <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-[#EFB036]" />
-                      <span>{branch.address}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <Phone className="h-4 w-4 flex-shrink-0 text-[#EFB036]" />
-                      <span>{branch.phone}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <Clock className="h-4 w-4 flex-shrink-0 text-[#EFB036]" />
-                      <span>{branch.openingHours}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <Users className="h-4 w-4 flex-shrink-0 text-[#EFB036]" />
-                      <span>Manager: <span className="font-semibold text-slate-900">{branch.manager}</span></span>
-                    </div>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs text-slate-600">Total Pesanan</p>
-                      <p className="mt-1 text-xl font-bold text-slate-900">{branch.totalOrders}</p>
-                    </div>
-                    <div className="rounded-xl bg-[#EFB036]/10 p-3">
-                      <p className="text-xs text-slate-600">Revenue</p>
-                      <p className="mt-1 text-sm font-bold text-[#EFB036]">{formatCurrency(branch.revenue)}</p>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="mt-4 flex gap-2">
+          {isLoading ? (
+            <div className="text-center py-20 text-slate-500">Memuat data cabang...</div>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+              {filteredBranches.map((branch) => (
+                <div key={branch.id} className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-lg">
+                  {/* Status Badge */}
+                  <div className="absolute right-4 top-4 z-10">
                     <button
-                      onClick={() => handleOpenModal(branch)}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-200"
+                      onClick={() => handleToggleActive(branch)}
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${branch.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                        }`}
                     >
-                      <Edit className="h-4 w-4" />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(branch.id)}
-                      className="flex items-center justify-center rounded-lg bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition-all hover:bg-red-100"
-                    >
-                      <Trash2 className="h-4 w-4" />
+                      {branch.is_active ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                      {branch.is_active ? 'Aktif' : 'Nonaktif'}
                     </button>
                   </div>
+
+                  <div className="p-6">
+                    {/* Branch Name */}
+                    <div className="mb-4 flex items-start gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EFB036]/10">
+                        <Store className="h-6 w-6 text-[#EFB036]" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-slate-900">{branch.name}</h3>
+                        {branch.map_url && (
+                          <a href={branch.map_url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-600 hover:underline">
+                            <ExternalLink className="mr-1 h-3 w-3" />
+                            Lihat Peta
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Details */}
+                    <div className="space-y-3 text-sm">
+                      <div className="flex items-start gap-2 text-slate-600">
+                        <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-[#EFB036]" />
+                        <span>{branch.address}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <Phone className="h-4 w-4 flex-shrink-0 text-[#EFB036]" />
+                        <span>{branch.phone || '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <Clock className="h-4 w-4 flex-shrink-0 text-[#EFB036]" />
+                        <span>{branch.operation_hours || '-'}</span>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mt-6 flex gap-2">
+                      <button
+                        onClick={() => handleOpenModal(branch)}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-200"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(branch.id)}
+                        className="flex items-center justify-center rounded-lg bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition-all hover:bg-red-100"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Empty State */}
-          {filteredBranches.length === 0 && (
+          {!isLoading && filteredBranches.length === 0 && (
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-white py-16">
               <Store className="h-16 w-16 text-slate-300" />
               <p className="mt-4 text-lg font-semibold text-slate-900">Tidak ada cabang ditemukan</p>
@@ -415,7 +367,7 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="max-h-[70vh] overflow-y-auto p-6">
               <div className="space-y-4">
                 <div>
@@ -444,60 +396,45 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Kota *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      placeholder="Jakarta Pusat"
-                      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Telepon *</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Telepon</label>
                     <input
                       type="tel"
-                      required
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       placeholder="021-12345678"
                       className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
                     />
                   </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">Jam Operasional *</label>
                     <input
                       type="text"
                       required
-                      value={formData.openingHours}
-                      onChange={(e) => setFormData({ ...formData, openingHours: e.target.value })}
+                      value={formData.operation_hours}
+                      onChange={(e) => setFormData({ ...formData, operation_hours: e.target.value })}
                       placeholder="10:00 - 22:00"
                       className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
                     />
                   </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Manager *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.manager}
-                      onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                      placeholder="Nama Manager"
-                      className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
-                    />
-                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Google Maps URL (Opsional)</label>
+                  <input
+                    type="url"
+                    value={formData.map_url}
+                    onChange={(e) => setFormData({ ...formData, map_url: e.target.value })}
+                    placeholder="https://goo.gl/maps/..."
+                    className="h-11 w-full rounded-lg border border-slate-300 bg-white px-4 text-sm transition-all focus:border-[#EFB036] focus:outline-none focus:ring-2 focus:ring-[#EFB036]/20"
+                  />
                 </div>
 
                 <div className="flex items-center gap-3">
                   <input
                     type="checkbox"
                     id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                     className="h-4 w-4 rounded border-slate-300 text-[#EFB036] focus:ring-2 focus:ring-[#EFB036]/20"
                   />
                   <label htmlFor="isActive" className="text-sm font-medium text-slate-700">Cabang Aktif</label>
@@ -508,15 +445,17 @@ export default function BranchesClient({ displayName, displayNameInitial, userEm
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="flex-1 rounded-xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50"
+                  disabled={isSubmitting}
+                  className="flex-1 rounded-xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-xl bg-[#EFB036] px-6 py-3 text-sm font-semibold text-black transition-all hover:bg-[#dfa028]"
+                  disabled={isSubmitting}
+                  className="flex-1 rounded-xl bg-[#EFB036] px-6 py-3 text-sm font-semibold text-black transition-all hover:bg-[#dfa028] disabled:opacity-50"
                 >
-                  {editingBranch ? 'Simpan Perubahan' : 'Tambah Cabang'}
+                  {isSubmitting ? 'Menyimpan...' : (editingBranch ? 'Simpan Perubahan' : 'Tambah Cabang')}
                 </button>
               </div>
             </form>

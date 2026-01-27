@@ -21,6 +21,7 @@ type CartContextValue = {
   decrementItem: (name: string) => void;
   removeItem: (name: string) => void;
   clearCart: () => void;
+  isLoaded: boolean;
 };
 
 const initialCartItems: CartItem[] = [];
@@ -126,9 +127,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       incrementItem,
       decrementItem,
       removeItem,
-      clearCart
+      clearCart,
+      isLoaded: isInitialized
     }),
-    [cartItems, cartItemCount, cartSubtotal, addItem, incrementItem, decrementItem, removeItem, clearCart]
+    [cartItems, cartItemCount, cartSubtotal, addItem, incrementItem, decrementItem, removeItem, clearCart, isInitialized]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

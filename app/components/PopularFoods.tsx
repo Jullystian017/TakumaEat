@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -7,6 +8,7 @@ import { Clock, Sparkles, Wine, ShoppingCart, ArrowRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/app/context/CartContext';
+import { cn } from '@/lib/utils';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -14,77 +16,39 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
   minimumFractionDigits: 0
 });
 
-const foods = [
-  {
-    name: 'Takuma Sushi Omakase',
-    price: 325000,
-    image:
-      'https://images.unsplash.com/photo-1590987337605-84f3ed4dc29f?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-    description:
-      'Koleksi pilihan chef dengan ikan segar premium dan Autentik.',
-    tagline: '12 course omakase experience',
-    pairing: 'Junmai Daiginjo',
-    highlights: ['Seasonal toro', 'Umami dashi', 'Hand-pressed sushi']
-  },
-  {
-    name: 'Black Garlic Tonkotsu Ramen',
-    price: 175000,
-    image:
-      'https://images.unsplash.com/photo-1735357825439-b84a7fba926b?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-    description:
-      'Kuah tonkotsu pekat dengan aroma black garlic dan chashu lembut.',
-    tagline: 'Rich tonkotsu with black garlic oil',
-    pairing: 'Gyokuro Tea',
-    highlights: ['12h broth', 'Chashu melt', 'Ajitama egg']
-  },
-  {
-    name: 'Wagyu Truffle Bento',
-    price: 285000,
-    image:
-      'https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?q=80&w=1200&auto=format&fit=crop',
-    description:
-      'Wagyu A5, telur onsen, dan nasi harum truffle yang elegan.',
-    tagline: 'Luxurious lunch bento',
-    pairing: 'Umeshu Spritz',
-    highlights: ['A5 wagyu', 'Truffle rice', 'Onsen egg']
-  },
-  {
-    name: 'Salmon Miso Glaze',
-    price: 210000,
-    image:
-      'https://images.unsplash.com/photo-1534939561126-855b8675edd7?q=80&w=1200&auto=format&fit=crop',
-    description:
-      'Salmon panggang dengan miso glaze emas dan sayuran musiman.',
-    tagline: 'Caramelized miso glaze over salmon',
-    pairing: 'Yuzu Highball',
-    highlights: ['Smoked miso', 'Charred veggies', 'Sesame crunch']
-  },
-  {
-    name: 'Matcha Velvet Parfait',
-    price: 95000,
-    image:
-      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1200&auto=format&fit=crop',
-    description:
-      'Lapisan mousse matcha, sponge lembut, dan crispies emas.',
-    tagline: 'Elegant layered dessert',
-    pairing: 'Ceremonial Matcha',
-    highlights: ['Uji matcha', 'Azuki crumble', 'Velvet mousse']
-  },
-  {
-    name: 'Crispy Ebi Bao',
-    price: 125000,
-    image:
-      'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?q=80&w=1200&auto=format&fit=crop',
-    description:
-      'Ebi tempura renyah dengan saus wasabi honey dalam bao lembut.',
-    tagline: 'Street classic reinvented',
-    pairing: 'Lychee Sencha',
-    highlights: ['Ebi tempura', 'Wasabi honey', 'Steamed bao']
-  }
-];
+interface FoodItem {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string | null;
+  description: string;
+  status: string;
+  stock: number;
+  highlights?: string[];
+  tagline?: string;
+  categories?: { name: string };
+}
 
 export function PopularFoods() {
   const { addItem } = useCart();
+  const [foods, setFoods] = useState<FoodItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchPopular() {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/menu/popular');
+        const data = await res.json();
+        if (data.items) setFoods(data.items);
+      } catch (err) {
+        console.error('Fetch popular foods error:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchPopular();
+  }, []);
 
   return (
     <section id="about" className="relative overflow-hidden border-t border-black/5 bg-white py-16 sm:py-24">
@@ -116,9 +80,15 @@ export function PopularFoods() {
         </div>
 
         <div className="hide-scrollbar flex gap-6 overflow-x-auto overflow-y-hidden px-5 pb-6 pr-14 snap-x snap-mandatory [scrollbar-width:none] sm:mx-0 sm:flex-none sm:overflow-visible sm:px-0 sm:pb-0 sm:gap-8 sm:pr-0 sm:grid sm:grid-cols-2 xl:grid-cols-3 sm:snap-none">
-          {foods.map((food, index) => (
+          {loading ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-[400px] w-full animate-pulse rounded-[28px] bg-slate-100" />
+            ))
+          ) : foods.length === 0 ? (
+            <div className="col-span-full py-10 text-center text-slate-400">Belum ada menu populer saat ini.</div>
+          ) : foods.map((food, index) => (
             <motion.div
-              key={food.name}
+              key={food.id}
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.2 }}
@@ -128,15 +98,15 @@ export function PopularFoods() {
             >
               <div className="relative h-52 w-full overflow-hidden sm:h-64">
                 <Image
-                  src={food.image}
+                  src={food.image_url || '/logotakuma.png'}
                   alt={food.name}
                   fill
-                  className="object-cover transition-transform duration-700 group-hover:scale-110"
+                  className={cn("object-cover transition-transform duration-700 group-hover:scale-110", food.stock === 0 && "grayscale opacity-50")}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
                 <div className="absolute bottom-4 left-5 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.28em] text-white">
                   <span className="inline-flex items-center rounded-full bg-white/20 px-3 py-1">
-                    Featured
+                    {food.stock === 0 ? 'Out of Stock' : 'Popular'}
                   </span>
                 </div>
               </div>
@@ -145,7 +115,7 @@ export function PopularFoods() {
                   <h3 className="text-lg font-semibold text-black transition-colors duration-300 group-hover:text-brand-gold sm:text-xl">
                     {food.name}
                   </h3>
-                  <p className="text-sm leading-relaxed text-black/65 sm:text-base">{food.description}</p>
+                  <p className="text-sm leading-relaxed text-black/65 sm:text-base line-clamp-2">{food.description}</p>
                   {food.highlights?.length ? (
                     <div className="flex flex-wrap items-center gap-2">
                       {food.highlights.map((item) => (
@@ -166,19 +136,25 @@ export function PopularFoods() {
                   </span>
                   <Button
                     type="button"
+                    disabled={food.stock === 0}
                     onClick={() =>
                       addItem({
                         name: food.name,
                         price: food.price,
-                        image: food.image,
-                        note: food.tagline
+                        image: food.image_url || '/logotakuma.png',
+                        note: food.description
                       })
                     }
-                    className="flex items-center gap-1.5 bg-gradient-to-r from-brand-gold to-amber-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-black shadow-[0_16px_40px_rgba(239,176,54,0.35)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_20px_48px_rgba(239,176,54,0.45)] sm:px-5 sm:text-sm"
+                    className={cn(
+                      "flex items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em] transition-all duration-300 sm:px-5 sm:text-sm",
+                      food.stock === 0
+                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                        : "bg-gradient-to-r from-brand-gold to-amber-300 text-black shadow-[0_16px_40px_rgba(239,176,54,0.35)] hover:-translate-y-1 hover:shadow-[0_20px_48px_rgba(239,176,54,0.45)]"
+                    )}
                     aria-label={`Tambahkan ${food.name} ke keranjang`}
                   >
                     <ShoppingCart className="h-4 w-4" />
-                    Add to Cart
+                    {food.stock === 0 ? 'Habis' : 'Add to Cart'}
                   </Button>
                 </div>
               </div>

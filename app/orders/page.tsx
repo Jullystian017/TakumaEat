@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { motion } from "framer-motion";
+import { Search, ShoppingBag, Truck, ChevronRight, Clock } from "lucide-react";
 
 import { Navbar } from "@/app/components/Navbar";
 import { Footer } from "@/app/components/Footer";
 import { Button } from "@/components/ui/button";
-
 import { cn } from "@/lib/utils";
 
 const statusLabels: Record<string, string> = {
@@ -58,10 +59,6 @@ type OrderSummary = {
 
 type OrdersResponse = {
   orders: OrderSummary[];
-};
-
-type UpdateOrderResponse = {
-  order: OrderSummary;
 };
 
 function mapTabToStatuses(tab: TabKey) {
@@ -135,67 +132,80 @@ export default function OrdersPage() {
     }
   }, [sessionStatus]);
 
+  const [visibleCount, setVisibleCount] = useState(6);
+
   const filteredOrders = useMemo(() => {
-    if (activeTab === "all") {
-      return orders;
+    let result = orders;
+    if (activeTab !== "all") {
+      const statuses = mapTabToStatuses(activeTab);
+      result = orders.filter(
+        (order) => statuses.includes(order.status) || statuses.includes(order.payment_status)
+      );
     }
-    const statuses = mapTabToStatuses(activeTab);
-    return orders.filter(
-      (order) => statuses.includes(order.status) || statuses.includes(order.payment_status)
-    );
+    return result;
   }, [orders, activeTab]);
 
-  const handleMockUpdate = async (orderId: string, payload: Partial<{ paymentStatus: string; status: string }>) => {
-    try {
-      const response = await fetch(`/api/orders/${orderId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
+  const groupedOrders = useMemo(() => {
+    const groups: { title: string; orders: OrderSummary[] }[] = [];
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const initialVisible = filteredOrders.slice(0, visibleCount);
 
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { message?: string };
-        throw new Error(body.message ?? "Gagal memperbarui status pesanan");
+    initialVisible.forEach((order) => {
+      const orderDate = new Date(order.created_at);
+      const orderDay = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate());
+
+      let title = "Sebelumnya";
+      if (orderDay.getTime() === today.getTime()) {
+        title = "Hari Ini";
+      } else if (orderDay.getTime() > today.getTime() - 7 * 24 * 60 * 60 * 1000) {
+        title = "Minggu Ini";
+      } else if (orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear()) {
+        title = "Bulan Ini";
       }
 
-      const data = (await response.json()) as UpdateOrderResponse;
-      setOrders((prev) => prev.map((order) => (order.id === data.order.id ? data.order : order)));
-    } catch (updateError) {
-      console.error(updateError);
-      setError(updateError instanceof Error ? updateError.message : "Gagal memperbarui status pesanan");
-    }
-  };
+      const existingGroup = groups.find((g) => g.title === title);
+      if (existingGroup) {
+        existingGroup.orders.push(order);
+      } else {
+        groups.push({ title, orders: [order] });
+      }
+    });
+
+    return groups;
+  }, [filteredOrders, visibleCount]);
 
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-white pb-24 pt-32 text-[#1f1a11]">
+      <main className="min-h-screen bg-[#f9f8fa] pb-24 pt-32 text-[#1f1a11]">
         <section className="mx-auto w-full max-w-5xl px-4 sm:px-6">
-          <header className="space-y-3 border-b border-[#d0bfa6]/40 pb-6">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#f4e7d6] px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-[#8d5814]">
+          <header className="space-y-4 border-b border-[#eadfce] pb-8">
+            <span className="inline-flex items-center gap-2 rounded-full bg-[#f4e7d6] px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.32em] text-[#8d5814]">
               Pesanan Saya
             </span>
-            <h1 className="text-3xl font-semibold tracking-tight text-[#1f1a11] sm:text-4xl">
-              Kelola pesananmu
+            <h1 className="text-4xl font-black tracking-tight text-[#1f1a11] sm:text-5xl">
+              Riwayat Transaksi
             </h1>
-            <p className="text-sm text-[#5c5244]">
-              Pantau status pesanan yang sedang berjalan, selesaikan pembayaran Midtrans, dan lihat riwayat transaksi.
+            <p className="text-sm font-medium text-[#5c5244] opacity-70">
+              Pantau status pesanan yang sedang berjalan, selesaikan pembayaran, dan lihat riwayat pesanan menu favoritmu.
             </p>
           </header>
 
-          <div className="mt-8 flex flex-wrap gap-2">
+          <div className="mt-8 flex flex-wrap gap-2 overflow-x-auto no-scrollbar pb-2">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => {
+                  setActiveTab(tab.key);
+                  setVisibleCount(6); // Reset pagination on tab change
+                }}
                 className={cn(
-                  "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] transition-colors",
+                  "whitespace-nowrap rounded-2xl border px-6 py-3 text-[10px] font-black uppercase tracking-[0.22em] transition-all",
                   activeTab === tab.key
-                    ? "border-brand-gold bg-[#fae8c8] text-[#8d5814]"
-                    : "border-[#eadfce] bg-[#fff6eb] text-[#7b5d2f] hover:border-brand-gold/60"
+                    ? "border-[#1f1a11] bg-[#1f1a11] text-brand-gold shadow-lg shadow-[#1f1a11]/10"
+                    : "border-[#eadfce] bg-white text-[#7b5d2f] hover:border-brand-gold"
                 )}
               >
                 {tab.label}
@@ -203,91 +213,124 @@ export default function OrdersPage() {
             ))}
           </div>
 
-          <div className="mt-10 space-y-6">
-            {loading && (
-              <div className="rounded-3xl border border-[#eadfce] bg-white p-6 text-sm text-[#7b6a57] shadow-[0_28px_60px_rgba(183,150,111,0.18)]">
-                Memuat pesanan...
+          <div className="mt-10">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-gold border-t-transparent" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#b59c7b]">Sinkronisasi Pesanan...</p>
               </div>
-            )}
-
-            {!loading && error && (
-              <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-600 shadow-[0_20px_45px_rgba(239,176,54,0.18)]">
-                {error}
+            ) : error ? (
+              <div className="rounded-3xl border border-red-100 bg-red-50 p-8 text-center sm:p-12">
+                <p className="text-sm font-bold text-red-600">{error}</p>
+                <Button onClick={() => window.location.reload()} className="mt-6 bg-red-600 text-white rounded-full">Coba Lagi</Button>
               </div>
-            )}
-
-            {!loading && !error && filteredOrders.length === 0 && (
-              <div className="flex flex-col items-center gap-4 rounded-3xl border border-[#eadfce] bg-white p-10 text-center text-sm text-[#7b6a57] shadow-[0_28px_60px_rgba(183,150,111,0.18)]">
-                <p className="text-base font-semibold text-[#1f1a11]">Belum ada pesanan</p>
-                <p className="max-w-md text-sm text-[#7b6a57]">
-                  Pesanan yang kamu buat akan muncul di sini. Mulai belanja menu favoritmu dan checkout untuk melihat pesanan aktif.
-                </p>
+            ) : filteredOrders.length === 0 ? (
+              <div className="flex flex-col items-center gap-6 rounded-[2.5rem] border border-[#eadfce] bg-white p-12 text-center shadow-xl shadow-[#b7966f]/10 outline-dashed outline-2 outline-offset-[-20px] outline-[#eadfce]">
+                <div className="h-20 w-20 rounded-3xl bg-[#fdf8f0] flex items-center justify-center text-brand-gold">
+                  <ShoppingBag size={40} strokeWidth={1.5} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black text-[#1f1a11]">Belum Ada Pesanan</h3>
+                  <p className="max-w-md text-sm font-medium text-[#7b6a57] opacity-80 leading-relaxed">
+                    Pesanan yang kamu buat akan muncul di sini. Ayo mulai belanja menu favoritmu!
+                  </p>
+                </div>
                 <Button
                   onClick={() => router.push("/menu")}
-                  className="w-full rounded-full bg-brand-gold px-6 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-[0_20px_42px_rgba(239,176,54,0.32)] sm:w-auto"
+                  className="rounded-full bg-brand-gold px-8 py-4 text-[10px] font-black uppercase tracking-[0.25em] text-black shadow-lg shadow-brand-gold/20"
                 >
                   Jelajahi Menu
                 </Button>
               </div>
-            )}
-
-            {!loading && !error && filteredOrders.length > 0 && (
-              <div className="space-y-4">
-                {filteredOrders.map((order) => (
-                  <article
-                    key={order.id}
-                    className="rounded-3xl border border-[#eadfce] bg-white p-6 shadow-[0_28px_60px_rgba(183,150,111,0.18)]"
-                  >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#b59c7b]">
-                          Pesanan #{order.id.slice(0, 8).toUpperCase()}
-                        </p>
-                        <h2 className="text-lg font-semibold text-[#1f1a11]">
-                          {statusLabels[order.status] ?? order.status}
-                        </h2>
-                        <p className="text-xs text-[#7b6a57]">
-                          Dibuat {formatOrderDate(order.created_at)}
-                        </p>
-                      </div>
-                      <div className="text-sm text-[#5c5244] sm:text-right">
-                        <p className="font-semibold text-[#1f1a11]">{formatCurrency(order.total_amount)}</p>
-                        <p className="text-xs">
-                          Pembayaran: {paymentLabels[order.payment_status] ?? order.payment_status}
-                        </p>
-                        <p className="text-xs">Metode: {order.payment_method.toUpperCase()}</p>
-                      </div>
+            ) : (
+              <div className="space-y-12">
+                {groupedOrders.map((group) => (
+                  <div key={group.title} className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="h-5 w-1 rounded-full bg-brand-gold shadow-[0_0_10px_rgba(183,150,111,0.3)]" />
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.45em] text-[#1f1a11]/80">
+                        {group.title}
+                      </h3>
                     </div>
-
-                    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                      <span className="inline-flex items-center gap-2 rounded-full bg-[#f4e7d6] px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.26em] text-[#8d5814]">
-                        {order.order_type === "delivery" ? "Delivery" : "Takeaway"}
-                      </span>
-                      {order.payment_method === "midtrans" && order.payment_status === "unpaid" && (
-                        <span className="inline-flex items-center gap-2 rounded-full bg-[#ffe1d9] px-4 py-1 text-[10px] font-semibold uppercase tracking-[0.26em] text-[#c2410c]">
-                          Menunggu pembayaran
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="text-xs font-semibold uppercase tracking-[0.26em] text-[#8d5814] transition-colors hover:text-[#a1691a]"
-                      >
-                        Lihat detail pesanan →
-                      </Link>
-                      {order.payment_method === "midtrans" && order.payment_status === "unpaid" && (
-                        <Button
-                          onClick={() => router.push(`/orders/${order.id}`)}
-                          className="w-full rounded-full bg-brand-gold px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-black shadow-[0_18px_36px_rgba(239,176,54,0.3)] sm:w-auto"
+                    <div className="grid gap-6">
+                      {group.orders.map((order) => (
+                        <motion.article
+                          key={order.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="group relative overflow-hidden rounded-[2.5rem] border border-[#eadfce]/50 bg-white p-6 transition-all hover:border-brand-gold hover:shadow-2xl hover:shadow-[#b7966f]/10"
                         >
-                          Selesaikan pembayaran
-                        </Button>
-                      )}
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            {/* Left Side: ID & Info */}
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-3">
+                                <span className="text-[11px] font-black uppercase tracking-[0.3em] text-[#b59c7b]">
+                                  #{order.id.slice(0, 8).toUpperCase()}
+                                </span>
+                                <span className={cn(
+                                  "rounded-lg px-3 py-1.5 text-[9px] font-black uppercase tracking-widest",
+                                  order.status === 'completed' ? "bg-emerald-500/10 text-emerald-600" :
+                                    order.status === 'cancelled' ? "bg-red-500/10 text-red-600" :
+                                      "bg-brand-gold/10 text-brand-gold"
+                                )}>
+                                  {statusLabels[order.status]}
+                                </span>
+                              </div>
+                              <div className="space-y-1">
+                                <h2 className="text-2xl font-black tracking-tight text-[#1f1a11]">
+                                  Pesanan {order.order_type === 'delivery' ? 'Delivery' : 'Takeaway'}
+                                </h2>
+                                <div className="flex items-center gap-2 text-[10px] font-bold text-[#b59c7b] uppercase tracking-widest">
+                                  <Clock size={12} strokeWidth={2.5} />
+                                  {formatOrderDate(order.created_at)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right Side: Price & Payment Status */}
+                            <div className="flex flex-col items-start gap-3 sm:items-end">
+                              <div className="text-left sm:text-right">
+                                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#b59c7b]">TOTAL BAYAR</p>
+                                <p className="text-3xl font-black tracking-tight text-[#1f1a11]">{formatCurrency(order.total_amount)}</p>
+                              </div>
+                              <div className="rounded-2xl bg-[#fdfaf5] border border-[#eadfce]/40 px-5 py-2">
+                                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[#8d5814]">
+                                  {order.payment_status === 'paid' ? 'PEMBAYARAN BERHASIL' :
+                                    order.payment_status === 'unpaid' ? 'MENUNGGU PEMBAYARAN' :
+                                      paymentLabels[order.payment_status]?.toUpperCase() || order.payment_status.toUpperCase()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer: Action Link */}
+                          <div className="mt-6 border-t border-[#eadfce]/30 pt-6">
+                            <Link
+                              href={`/orders/${order.id}`}
+                              className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.35em] text-[#b59c7b] transition-all hover:gap-4 hover:text-[#1f1a11]"
+                            >
+                              Lihat Detail Pesanan <ChevronRight size={14} className="text-brand-gold" />
+                            </Link>
+                          </div>
+                        </motion.article>
+                      ))}
                     </div>
-                  </article>
+                  </div>
                 ))}
+
+                {filteredOrders.length > visibleCount && (
+                  <div className="flex justify-center pt-4">
+                    <button
+                      onClick={() => setVisibleCount(prev => prev + 6)}
+                      className="group flex flex-col items-center gap-3 transition-all"
+                    >
+                      <div className="rounded-full border border-[#eadfce] bg-white px-8 py-3.5 text-[10px] font-black uppercase tracking-[0.3em] text-[#7b5d2f] shadow-sm transition-all hover:border-brand-gold hover:bg-brand-gold hover:text-black">
+                        Lihat Lebih Banyak
+                      </div>
+                      <div className="h-1 my-1 w-1 bg-brand-gold rounded-full animate-bounce" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

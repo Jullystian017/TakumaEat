@@ -253,7 +253,7 @@ export default function MenuPage() {
                               name: item.name,
                               price: item.price,
                               image: item.image_url,
-                              note: item.description
+                              note: ""
                             });
                           }}
                           className={cn(
@@ -360,7 +360,7 @@ export default function MenuPage() {
                           name: selectedItem.name,
                           price: selectedItem.price,
                           image: selectedItem.image_url,
-                          note: selectedItem.description
+                          note: ""
                         });
                         setSelectedItem(null);
                       }}
