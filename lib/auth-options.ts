@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import GoogleProvider from 'next-auth/providers/google';
 import bcrypt from 'bcryptjs';
 
 import { supabaseAdminClient } from '@/lib/supabase/admin';
@@ -10,6 +11,11 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+      allowDangerousEmailAccountLinking: true
+    }),
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
@@ -31,6 +37,10 @@ export const authOptions: NextAuthOptions = {
 
         if (error || !existingUser) {
           throw new Error('Email atau kata sandi salah');
+        }
+
+        if (!existingUser.password_hash) {
+          throw new Error('Silakan masuk menggunakan Google');
         }
 
         const passwordValid = await bcrypt.compare(
@@ -56,6 +66,41 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login'
   },
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === 'google') {
+        if (!user.email) return false;
+
+        const { data: existingUser } = await supabaseAdminClient
+          .from('profiles')
+          .select('id, role')
+          .eq('email', user.email)
+          .maybeSingle();
+
+        if (!existingUser) {
+          const { data: newUser, error: insertError } = await supabaseAdminClient
+            .from('profiles')
+            .insert({
+              name: user.name ?? 'Google User',
+              email: user.email,
+              role: 'customer'
+              // password_hash remains null for OAuth users
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Failed to create OAuth profile:', insertError);
+            return false;
+          }
+          user.id = newUser.id;
+          (user as any).role = newUser.role;
+        } else {
+          user.id = existingUser.id;
+          (user as any).role = existingUser.role;
+        }
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
