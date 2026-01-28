@@ -84,7 +84,7 @@ export function ResetPasswordForm() {
         return (
             <div className="text-center p-6 border border-red-100 bg-red-50 rounded-3xl">
                 <p className="text-sm text-red-600 font-medium">Link reset tidak valid atau sudah kedaluwarsa.</p>
-                <Link href="/forgot-password" size="sm" className="mt-4 inline-block text-xs font-bold uppercase text-brand-gold underline underline-offset-4">
+                <Link href="/forgot-password" className="mt-4 inline-block text-xs font-bold uppercase text-brand-gold underline underline-offset-4">
                     Minta link baru
                 </Link>
             </div>
