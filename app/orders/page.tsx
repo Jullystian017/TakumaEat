@@ -110,43 +110,43 @@ export default function OrdersPage() {
     }
   }, [sessionStatus, router]);
 
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/orders", { cache: "no-store" });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message ?? "Gagal memuat pesanan");
+      }
+      const data = (await response.json()) as OrdersResponse;
+      setOrders(data.orders);
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Terjadi kesalahan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (!confirm('Apakah Anda yakin ingin membatalkan pesanan ini?')) return;
+
+    try {
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' })
+      });
+
+      if (!res.ok) throw new Error('Gagal membatalkan pesanan');
+
+      // Update local state
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch("/api/orders", { cache: "no-store" });
-        if (!response.ok) {
-          const body = (await response.json().catch(() => ({}))) as { message?: string };
-          throw new Error(body.message ?? "Gagal memuat pesanan");
-        }
-        const data = (await response.json()) as OrdersResponse;
-        setOrders(data.orders);
-      } catch (fetchError) {
-        setError(fetchError instanceof Error ? fetchError.message : "Terjadi kesalahan");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const handleCancelOrder = async (orderId: string) => {
-      if (!confirm('Apakah Anda yakin ingin membatalkan pesanan ini?')) return;
-
-      try {
-        const res = await fetch(`/api/orders/${orderId}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'cancelled' })
-        });
-
-        if (!res.ok) throw new Error('Gagal membatalkan pesanan');
-
-        // Update local state
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
-      } catch (err: any) {
-        alert(err.message);
-      }
-    };
-
     if (sessionStatus === "authenticated") {
       fetchOrders();
     }
