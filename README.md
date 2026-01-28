@@ -1,112 +1,79 @@
-# TakumaEat — Japanese & Asian Fusion Restaurant Website
+# 🍱 TakumaEat - Premium Japanese Dining Experience
 
-Premium website for TakumaEat, a modern Japanese and Asian Fusion restaurant featuring minimalist design, elegant animations, and a sophisticated black-white-gold color palette.
+TakumaEat adalah platform pemesanan makanan (Online Ordering System) modern yang dirancang khusus untuk restoran dengan pengalaman kuliner Jepang yang premium. Dibangun dengan fokus pada kecepatan, estetika modern, dan kemudahan penggunaan baik bagi pelanggan maupun administrator.
 
-## 🎨 Design System
+## 🚀 Fitur Utama
 
-### Color Palette
-- **Black** (`#000000`) — Navbar, footer, primary text
-- **White** (`#FFFFFF`) — Background, whitespace
-- **Gold** (`#EFB036`) — CTA buttons, hover effects, badges
+### 🛒 Pengalaman Pelanggan
+- **Interactive Menu**: Menu dengan kategori dan pencarian yang cepat serta animasi smooth menggunakan Framer Motion.
+- **Flexible Checkout**: Mendukung mode **Takeaway** (Pilih Cabang) dan **Delivery** (Integrasi Peta).
+- **Secure Payment**: Pembayaran otomatis melalui **Midtrans** (Virtual Account, E-Wallet, Kartu Kredit) dan COD.
+- **Smart Auth**: Login cepat dengan **Google OAuth** atau email konvensional.
+- **Password Recovery**: Sistem reset password yang aman dengan token terenkripsi.
+- **Order Tracking**: Pantau status pesanan secara real-time dari dashboard pelanggan.
 
-### Typography
-- **Font**: Noto Sans JP
-- **Style**: Clean, modern, premium
-- **Tracking**: Wide letter-spacing for uppercase labels
+### 🛠️ Dashboard Admin (Super-Power)
+- **Order Management**: Kelola status pesanan (Processing → Preparing → Ready → Delivered) dengan notifikasi status otomatis.
+- **Menu & Inventory**: Update stok, harga, deskripsi, dan kategori menu secara instan.
+- **Promotion System**: Kelola kode promo/diskon untuk meningkatkan penjualan.
+- **Analytics & Reports**: Visualisasi data penjualan dan statistik pesanan dalam bentuk chart interaktif.
+- **Branch Management**: Pengaturan multi-cabang untuk operasional yang lebih luas.
 
-### Visual Style
-- Minimalist modern aesthetic
-- Generous whitespace
-- Rounded corners (`rounded-2xl`)
-- Soft shadows and glow effects
-- Smooth Framer Motion animations (fade-in, slide-up, parallax)
+## 💻 Tech Stack
 
-## 🏗️ Tech Stack
+- **Frontend**: [Next.js 14](https://nextjs.org/) (App Router), [TailwindCSS](https://tailwindcss.com/)
+- **Animation**: [Framer Motion](https://www.framer.com/motion/)
+- **Backend/Database**: [Supabase](https://supabase.com/) (PostgreSQL + Auth + Storage)
+- **Authentication**: [NextAuth.js](https://next-auth.js.org/) (Credentials & Google Provider)
+- **Payments**: [Midtrans API](https://midtrans.com/)
+- **UI Components**: Radix UI & Lucide Icons
+- **State Management**: React Context & Hooks
 
-- **Framework**: Next.js 14 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Animations**: Framer Motion
-- **Components**: shadcn/ui
-- **Icons**: Lucide React (Bell, ShoppingCart, Clock, Sparkles, Wine)
+## 🛠️ Instalasi Lokal
 
-## 📐 Project Structure
+1. **Clone Repositori**:
+   ```bash
+   git clone https://github.com/Jullystian017/TakumaEat.git
+   cd TakumaEat
+   ```
 
-```
-/app
-├── layout.tsx
-├── page.tsx
-├── globals.css
-└── /components
-    ├── Navbar.tsx
-    ├── HeroSection.tsx
-    ├── CategorySection.tsx
-    ├── PromoSection.tsx
-    ├── PopularFoods.tsx
-    ├── Testimonials.tsx
-    ├── CTASection.tsx
-    └── Footer.tsx
-/components/ui
-├── button.tsx
-├── badge.tsx
-└── card.tsx
-/lib
-└── utils.ts
-```
+2. **Install Dependensi**:
+   ```bash
+   npm install
+   ```
 
-## 🚀 Getting Started
+3. **Konfigurasi Environment Variables**:
+   Buat file `.env.local` di root direktori dan isi sesuai kebutuhan:
+   ```env
+   # Supabase
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-### Installation
+   # NextAuth
+   NEXTAUTH_SECRET=your_secret_string
+   NEXTAUTH_URL=http://localhost:3000
 
-```bash
-npm install
-```
+   # Google OAuth
+   GOOGLE_CLIENT_ID=your_id
+   GOOGLE_CLIENT_SECRET=your_secret
 
-### Development
+   # Midtrans
+   MIDTRANS_SERVER_KEY=your_server_key
+   NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=your_client_key
+   ```
 
-```bash
-npm run dev
-```
+4. **Jalankan Project**:
+   ```bash
+   npm run dev
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the homepage.
-
-### Build
-
-```bash
-npm run build
-npm start
-```
-
-## 📄 Homepage Sections
-
-1. **Navbar** — Sticky transparent navbar with scroll-triggered white background, notification/cart icons, login button
-2. **Hero** — Dark fullscreen section with two-column layout, chef showcase card, reservation badge
-3. **Categories** — 4-column grid (Sushi, Ramen, Bento, Dessert) with hover overlays
-4. **Promo** — Draggable carousel with seasonal offers
-5. **Popular Foods** — 6 premium food cards with highlights, pairing info, and CTA
-6. **Testimonials** — 3 customer reviews with ratings
-7. **CTA** — Call-to-action section with "Order Now" button
-8. **Footer** — Navigation, social links, copyright
-
-## 🎯 Key Features
-
-- **Responsive Design** — Mobile-first, fully responsive across all breakpoints
-- **Smooth Animations** — Framer Motion scroll-triggered animations
-- **Premium UX** — Hover effects, card lifts, glow shadows
-- **Accessible** — Semantic HTML, ARIA labels
-- **Performance** — Next.js Image optimization, lazy loading
-
-## 📝 Notes
-
-- Tailwind warnings (`@tailwind`, `@apply`) in `app/globals.css` are IDE-only; safe to ignore or silence via Tailwind CSS IntelliSense extension.
-- `vscode://schemas/mcp` warning in `package.json` is an IDE artifact with no runtime impact.
-
-## 📧 Contact
-
-For questions or collaboration:
-- **Email**: hello@takumaeat.com
-- **Instagram**: @takumaeat
+## 🔒 Keamanan & RBAC
+Project ini menggunakan **Role-Based Access Control (RBAC)**.
+- **Admin**: Akses penuh ke `/admin/*` dashboard.
+- **Customer**: Akses ke fitur pemesanan dan profil pribadi.
+- **Middleware**: Proteksi route otomatis untuk mencegah akses tidak sah ke dashboard admin.
 
 ---
 
-© 2025 TakumaEat. All rights reserved.
+All made with love by Jullystian
